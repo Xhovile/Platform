@@ -2,6 +2,7 @@ import {
   browserSupportsWebAuthn,
   startAuthentication,
   startRegistration,
+  WebAuthnAbortService,
   type AuthenticationResponseJSON,
   type PublicKeyCredentialCreationOptionsJSON,
   type PublicKeyCredentialRequestOptionsJSON,
@@ -10,6 +11,10 @@ import {
 
 export function isPasskeySupported(): boolean {
   return browserSupportsWebAuthn();
+}
+
+export function cancelPasskeyCeremony(): void {
+  WebAuthnAbortService.cancelCeremony();
 }
 
 export async function registerPasskey(
