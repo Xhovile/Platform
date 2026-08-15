@@ -9,6 +9,8 @@ export type PasskeyCredential = {
   createdAt: Date;
   lastUsedAt?: Date;
   name?: string;
+  deviceType?: 'singleDevice' | 'multiDevice';
+  backedUp?: boolean;
 };
 
 export type PasskeyRpConfig = {
@@ -21,6 +23,7 @@ export type PasskeyUser = {
   id: string;
   name: string;
   displayName: string;
+  webAuthnUserId?: Uint8Array;
 };
 
 export interface PasskeyCredentialRepository {
@@ -28,19 +31,21 @@ export interface PasskeyCredentialRepository {
   findByCredentialId(credentialId: string): Promise<PasskeyCredential | null>;
   create(credential: PasskeyCredential): Promise<void>;
   updateCounter(credentialId: string, counter: number): Promise<void>;
+  touch(credentialId: string, at: Date): Promise<void>;
   revoke(credentialId: string): Promise<void>;
 }
 
 export type CeremonyKind = 'registration' | 'authentication';
 
 export type CeremonyState = {
-  userId: string;
+  id: string;
   kind: CeremonyKind;
+  userId?: string;
   challenge: string;
   expiresAt: Date;
 };
 
 export interface PasskeyCeremonyRepository {
   save(state: CeremonyState): Promise<void>;
-  consume(userId: string, kind: CeremonyKind): Promise<CeremonyState | null>;
+  consume(ceremonyId: string): Promise<CeremonyState | null>;
 }
