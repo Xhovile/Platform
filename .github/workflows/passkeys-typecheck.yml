@@ -1,0 +1,35 @@
+name: Platform Passkeys
+
+on:
+  push:
+    paths:
+      - 'auth/passkeys/**'
+      - '.github/workflows/passkeys-typecheck.yml'
+  pull_request:
+    paths:
+      - 'auth/passkeys/**'
+      - '.github/workflows/passkeys-typecheck.yml'
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: auth/passkeys
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: auth/passkeys/package.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
