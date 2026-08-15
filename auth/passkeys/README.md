@@ -46,4 +46,4 @@ The application also decides how a verified Platform result becomes an applicati
 
 ## Runtime
 
-The server package targets modern Node.js runtimes. `@simplewebauthn/server` v13 currently documents Node LTS 20.x and higher. citehttps://simplewebauthn.dev/docs/packages/server
+The server package targets modern Node.js runtimes. `@simplewebauthn/server` v13 documents Node LTS 20.x and higher.
