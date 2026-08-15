@@ -1,0 +1,14 @@
+{
+  "name": "@xhovile/passkeys",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Reusable WebAuthn/passkey authentication core for Xhovile applications",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  }
+}
