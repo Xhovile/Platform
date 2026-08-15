@@ -31,7 +31,7 @@ export async function createRegistrationOptions(user: PasskeyUser, credentials: 
     ...(user.webAuthnUserId ? { userID: user.webAuthnUserId } : {}),
     attestationType: 'none',
     excludeCredentials: credentials.map(({ id, transports }) => ({ id, transports })),
-    authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+    authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
   });
   const ceremonyId = createCeremonyId();
   await ceremonyRepository.save({ id: ceremonyId, userId: user.id, kind: 'registration', challenge: options.challenge, expiresAt: new Date(Date.now() + ttl(config)) });
@@ -50,7 +50,7 @@ export async function verifyRegistration(response: RegistrationResponseJSON, cer
 }
 
 export async function createAuthenticationOptions(userId: string, credentials: PasskeyCredential[], ceremonyRepository: PasskeyCeremonyRepository, config: PasskeyServerConfig): Promise<PasskeyOptionsResult<PublicKeyCredentialRequestOptionsJSON>> {
-  const options = await generateAuthenticationOptions({ rpID: config.rpID, allowCredentials: credentials.map(({ id, transports }) => ({ id, transports })), userVerification: 'preferred' });
+  const options = await generateAuthenticationOptions({ rpID: config.rpID, allowCredentials: credentials.map(({ id, transports }) => ({ id, transports })), userVerification: 'required' });
   const ceremonyId = createCeremonyId();
   await ceremonyRepository.save({ id: ceremonyId, userId, kind: 'authentication', challenge: options.challenge, expiresAt: new Date(Date.now() + ttl(config)) });
   return { ceremonyId, options };
