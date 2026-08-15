@@ -1,0 +1,42 @@
+{
+  "name": "@xhovile/platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Reusable application infrastructure for Xhovile products",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    "./passkeys": {
+      "types": "./dist/auth/passkeys/src/index.d.ts",
+      "import": "./dist/auth/passkeys/src/index.js"
+    },
+    "./passkeys/server": {
+      "types": "./dist/auth/passkeys/src/server.d.ts",
+      "import": "./dist/auth/passkeys/src/server.js"
+    },
+    "./passkeys/browser": {
+      "types": "./dist/auth/passkeys/src/browser.d.ts",
+      "import": "./dist/auth/passkeys/src/browser.js"
+    }
+  },
+  "files": [
+    "dist",
+    "auth",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^13.0.0",
+    "@simplewebauthn/server": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}
