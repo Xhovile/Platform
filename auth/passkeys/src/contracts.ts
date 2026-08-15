@@ -1,8 +1,10 @@
+import type { AuthenticatorTransport } from '@simplewebauthn/server';
+
 export type PasskeyCredential = {
   id: string;
   publicKey: Uint8Array | ArrayBuffer;
   counter: number;
-  transports?: string[];
+  transports?: AuthenticatorTransport[];
   userId: string;
   createdAt: Date;
   lastUsedAt?: Date;
