@@ -51,6 +51,8 @@ export interface RateLimitStore {
   ): Promise<RateLimitStoreResult>;
 }
 
+export type RateLimitStoreFailureMode = 'fail-open' | 'fail-closed';
+
 export type RateLimitResult = {
   /** Whether the request is permitted. */
   allowed: boolean;
@@ -62,6 +64,8 @@ export type RateLimitResult = {
   resetAt: number;
   /** Milliseconds until the request should be retried; zero when allowed. */
   retryAfterMs: number;
+  /** True when the request was allowed despite store failure. */
+  degraded: boolean;
 };
 
 export type RateLimitKey = {
@@ -70,3 +74,13 @@ export type RateLimitKey = {
   /** Strategy that produced the key. */
   strategy: RateLimitKeyStrategy;
 };
+
+export class RateLimitStoreUnavailableError extends Error {
+  readonly cause: unknown;
+
+  constructor(cause: unknown) {
+    super('Rate-limit store is unavailable.');
+    this.name = 'RateLimitStoreUnavailableError';
+    this.cause = cause;
+  }
+}

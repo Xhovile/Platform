@@ -1,17 +1,21 @@
 import type { NextFunction, Request, RequestHandler } from 'express';
 import { MemoryStore } from '../memory-store.js';
 import { RateLimiter } from '../limiter.js';
-import type {
-  RateLimitContext,
-  RateLimitKeyResolver,
-  RateLimitKeyStrategy,
-  RateLimitPolicy,
-  RateLimitStore,
+import {
+  RateLimitStoreUnavailableError,
+  type RateLimitContext,
+  type RateLimitKeyResolver,
+  type RateLimitKeyStrategy,
+  type RateLimitPolicy,
+  type RateLimitStore,
+  type RateLimitStoreFailureMode,
 } from '../contracts.js';
 
 export type ExpressRateLimitOptions = Omit<RateLimitPolicy, 'keyResolver'> & {
   /** Optional store; MemoryStore is used when omitted. */
   store?: RateLimitStore;
+  /** How requests behave when the backing store is unavailable. */
+  storeFailure?: RateLimitStoreFailureMode;
   /** Extract the client IP used by the `ip` and `ip+user` strategies. */
   getIp?: (request: Request) => string | undefined;
   /** Extract the authenticated user identifier used by user-based strategies. */
@@ -23,7 +27,16 @@ export type ExpressRateLimitOptions = Omit<RateLimitPolicy, 'keyResolver'> & {
 };
 
 export function rateLimit(options: ExpressRateLimitOptions): RequestHandler {
-  const { store, getIp, getUserId, getRoute, keyResolver, ...policy } = options;
+  const {
+    store,
+    storeFailure,
+    getIp,
+    getUserId,
+    getRoute,
+    keyResolver,
+    ...policy
+  } = options;
+
   const limiter = new RateLimiter(
     {
       ...policy,
@@ -31,6 +44,7 @@ export function rateLimit(options: ExpressRateLimitOptions): RequestHandler {
       keyResolver,
     },
     store ?? new MemoryStore(),
+    { storeFailure },
   );
 
   return async function rateLimitMiddleware(
@@ -61,6 +75,14 @@ export function rateLimit(options: ExpressRateLimitOptions): RequestHandler {
 
       next();
     } catch (error) {
+      if (error instanceof RateLimitStoreUnavailableError) {
+        response.status(503).json({
+          error: 'Service Unavailable',
+          message: 'Rate limiting is temporarily unavailable. Please retry later.',
+        });
+        return;
+      }
+
       next(error);
     }
   };

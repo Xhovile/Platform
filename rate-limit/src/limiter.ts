@@ -7,24 +7,37 @@ import type {
   RateLimitPolicy,
   RateLimitResult,
   RateLimitStore,
+  RateLimitStoreFailureMode,
 } from './contracts.js';
+import { RateLimitStoreUnavailableError } from './contracts.js';
+
+export type RateLimiterOptions = {
+  now?: () => number;
+  /**
+   * `fail-closed` rejects requests when the backing store is unavailable.
+   * `fail-open` allows the request and marks the result as degraded.
+   */
+  storeFailure?: RateLimitStoreFailureMode;
+};
 
 export class RateLimiter {
   private readonly policy: RateLimitPolicy;
   private readonly store: RateLimitStore;
   private readonly keyResolver?: RateLimitKeyResolver;
   private readonly now: () => number;
+  private readonly storeFailure: RateLimitStoreFailureMode;
 
   constructor(
     policy: RateLimitPolicy,
     store: RateLimitStore,
-    options: { now?: () => number } = {},
+    options: RateLimiterOptions = {},
   ) {
     validatePolicy(policy);
     this.policy = policy;
     this.store = store;
     this.keyResolver = policy.keyResolver;
     this.now = options.now ?? Date.now;
+    this.storeFailure = options.storeFailure ?? 'fail-closed';
   }
 
   async check(context: RateLimitContext): Promise<RateLimitResult> {
@@ -35,25 +48,42 @@ export class RateLimiter {
       this.keyResolver,
     );
     const storeKey = `${this.policy.name}:${resolvedKey.value}`;
-    const state = await this.store.increment(
-      storeKey,
-      this.policy.windowMs,
-      nowMs,
-    );
 
-    const allowed = state.count <= this.policy.limit;
-    const remaining = Math.max(0, this.policy.limit - state.count);
-    const retryAfterMs = allowed
-      ? 0
-      : Math.max(0, state.resetAt - nowMs);
+    try {
+      const state = await this.store.increment(
+        storeKey,
+        this.policy.windowMs,
+        nowMs,
+      );
 
-    return {
-      allowed,
-      limit: this.policy.limit,
-      remaining,
-      resetAt: state.resetAt,
-      retryAfterMs,
-    };
+      const allowed = state.count <= this.policy.limit;
+      const remaining = Math.max(0, this.policy.limit - state.count);
+      const retryAfterMs = allowed
+        ? 0
+        : Math.max(0, state.resetAt - nowMs);
+
+      return {
+        allowed,
+        limit: this.policy.limit,
+        remaining,
+        resetAt: state.resetAt,
+        retryAfterMs,
+        degraded: false,
+      };
+    } catch (error) {
+      if (this.storeFailure === 'fail-open') {
+        return {
+          allowed: true,
+          limit: this.policy.limit,
+          remaining: this.policy.limit,
+          resetAt: nowMs,
+          retryAfterMs: 0,
+          degraded: true,
+        };
+      }
+
+      throw new RateLimitStoreUnavailableError(error);
+    }
   }
 }
 
