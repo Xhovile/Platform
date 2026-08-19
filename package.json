@@ -27,6 +27,10 @@
     "./rate-limit/express": {
       "types": "./dist/rate-limit/express/index.d.ts",
       "import": "./dist/rate-limit/express/index.js"
+    },
+    "./rate-limit/redis": {
+      "types": "./dist/rate-limit/redis/index.d.ts",
+      "import": "./dist/rate-limit/redis/index.js"
     }
   },
   "files": ["dist", "auth", "rate-limit", "README.md", "docs"],
