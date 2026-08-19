@@ -11,5 +11,11 @@
     "rootDir": ".",
     "skipLibCheck": true
   },
-  "include": ["auth/passkeys/src/**/*.ts"]
+  "include": [
+    "auth/passkeys/src/**/*.ts",
+    "rate-limit/src/**/*.ts",
+    "rate-limit/express/**/*.ts",
+    "rate-limit/redis/**/*.ts",
+    "rate-limit/test/**/*.ts"
+  ]
 }

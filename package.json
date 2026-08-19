@@ -19,19 +19,36 @@
     "./passkeys/browser": {
       "types": "./dist/auth/passkeys/src/browser.d.ts",
       "import": "./dist/auth/passkeys/src/browser.js"
+    },
+    "./rate-limit": {
+      "types": "./dist/rate-limit/src/index.d.ts",
+      "import": "./dist/rate-limit/src/index.js"
+    },
+    "./rate-limit/express": {
+      "types": "./dist/rate-limit/express/index.d.ts",
+      "import": "./dist/rate-limit/express/index.js"
+    },
+    "./rate-limit/redis": {
+      "types": "./dist/rate-limit/redis/index.d.ts",
+      "import": "./dist/rate-limit/redis/index.js"
     }
   },
-  "files": ["dist", "auth", "README.md", "docs"],
+  "files": ["dist", "auth", "rate-limit", "README.md", "docs"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "test": "npm run build && node --test dist/rate-limit/test/*.test.js",
     "prepare": "npm run build"
+  },
+  "peerDependencies": {
+    "express": ">=4.18.0 <6"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.0.0",
     "@simplewebauthn/server": "^13.0.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.0.0"
   }
