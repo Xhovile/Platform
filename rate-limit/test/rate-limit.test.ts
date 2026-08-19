@@ -79,6 +79,23 @@ test('different users are isolated by the user key strategy', async () => {
   assert.equal((await limiter.check({ userId: 'user-b' })).allowed, true);
 });
 
+test('different policies do not share counters', async () => {
+  const store = new MemoryStore();
+  const first = new RateLimiter(
+    fixedWindowPolicy({ name: 'policy-a', limit: 1, windowMs: 60_000, key: 'user' }),
+    store,
+  );
+  const second = new RateLimiter(
+    fixedWindowPolicy({ name: 'policy-b', limit: 1, windowMs: 60_000, key: 'user' }),
+    store,
+  );
+
+  assert.equal((await first.check({ userId: 'same-user' })).allowed, true);
+  assert.equal((await second.check({ userId: 'same-user' })).allowed, true);
+  assert.equal((await first.check({ userId: 'same-user' })).allowed, false);
+  assert.equal((await second.check({ userId: 'same-user' })).allowed, false);
+});
+
 test('concurrent requests are counted without exceeding the limit', async () => {
   const limiter = new RateLimiter(
     fixedWindowPolicy({
@@ -96,6 +113,43 @@ test('concurrent requests are counted without exceeding the limit', async () => 
 
   assert.equal(results.filter((result) => result.allowed).length, 10);
   assert.equal(results.filter((result) => !result.allowed).length, 10);
+});
+
+test('invalid policies are rejected at construction', () => {
+  assert.throws(
+    () => new RateLimiter({ name: '', limit: 1, windowMs: 60_000, key: 'ip' }, new MemoryStore()),
+    /name must not be empty/,
+  );
+  assert.throws(
+    () => new RateLimiter({ name: 'bad-limit', limit: 0, windowMs: 60_000, key: 'ip' }, new MemoryStore()),
+    /limit must be a positive integer/,
+  );
+  assert.throws(
+    () => new RateLimiter({ name: 'bad-window', limit: 1, windowMs: 0, key: 'ip' }, new MemoryStore()),
+    /windowMs must be a positive integer/,
+  );
+  assert.throws(
+    () => new RateLimiter({ name: 'missing-resolver', limit: 1, windowMs: 60_000, key: 'custom' }, new MemoryStore()),
+    /custom key resolver is required/,
+  );
+});
+
+test('custom keys must be bounded strings', async () => {
+  const limiter = new RateLimiter(
+    fixedWindowPolicy({
+      name: 'custom-key',
+      limit: 1,
+      windowMs: 60_000,
+      key: 'custom',
+      keyResolver: () => 'x'.repeat(257),
+    }),
+    new MemoryStore(),
+  );
+
+  await assert.rejects(
+    () => limiter.check({}),
+    /at most 256 characters/,
+  );
 });
 
 test('fail-closed turns store failure into RateLimitStoreUnavailableError', async () => {
