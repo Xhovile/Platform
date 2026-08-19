@@ -1,22 +1,24 @@
 # Authentication
 
-Shared authentication capabilities for Xhovile applications.
+Shared authentication and authorization capabilities for Xhovile applications.
 
 ## Scope
 
-This module owns authentication mechanisms and supporting security workflows. Application-specific screens, routing, product roles, and business authorization remain in the consuming application.
+This module owns reusable identity-security mechanisms and authorization primitives. Application-specific screens, routing, account models, product roles, and business rules remain in the consuming application.
 
-## Initial capability
+## Current capabilities
 
 - Passkeys / WebAuthn
+- TOTP / authenticator-app two-factor authentication
 
-## Planned capabilities
-
-- Two-factor authentication (TOTP)
 - Session management
-- Account recovery
-- Trusted device management
+
+- RBAC / authorization primitives
+
+Each capability has its own README describing its integration boundary and security requirements.
 
 ## Integration principle
 
-The authentication layer should expose stable application-facing interfaces while keeping WebAuthn ceremony details, credential persistence, verification, and security checks inside this module.
+Capabilities in `auth/` expose stable application-facing interfaces while keeping security-sensitive implementation details inside Platform.
+
+The consuming application remains responsible for identity storage, sessions where application-specific integration is required, account lifecycle, and product-specific authorization policy.
