@@ -6,6 +6,7 @@ import type {
 } from './contracts.js';
 
 const DEFAULT_CUSTOM_KEY_PREFIX = 'custom';
+const MAX_CUSTOM_KEY_LENGTH = 256;
 
 export function resolveRateLimitKey(
   strategy: RateLimitKeyStrategy,
@@ -39,8 +40,11 @@ export function resolveRateLimitKey(
       }
 
       const value = customResolver(context);
-      if (!value) {
-        throw new Error('The custom key resolver must return a non-empty key.');
+      if (typeof value !== 'string' || !value.trim()) {
+        throw new Error('The custom key resolver must return a non-empty string.');
+      }
+      if (value.length > MAX_CUSTOM_KEY_LENGTH) {
+        throw new Error(`The custom key resolver must return at most ${MAX_CUSTOM_KEY_LENGTH} characters.`);
       }
 
       return {
