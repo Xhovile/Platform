@@ -19,9 +19,13 @@
     "./passkeys/browser": {
       "types": "./dist/auth/passkeys/src/browser.d.ts",
       "import": "./dist/auth/passkeys/src/browser.js"
+    },
+    "./rate-limit": {
+      "types": "./dist/rate-limit/src/index.d.ts",
+      "import": "./dist/rate-limit/src/index.js"
     }
   },
-  "files": ["dist", "auth", "README.md", "docs"],
+  "files": ["dist", "auth", "rate-limit", "README.md", "docs"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
