@@ -1,6 +1,6 @@
 import type { NextFunction, Request, RequestHandler } from 'express';
-import { MemoryStore } from '../memory-store.js';
-import { RateLimiter } from '../limiter.js';
+import { MemoryStore } from '../src/memory-store.js';
+import { RateLimiter } from '../src/limiter.js';
 import {
   RateLimitStoreUnavailableError,
   type RateLimitContext,
@@ -9,7 +9,7 @@ import {
   type RateLimitPolicy,
   type RateLimitStore,
   type RateLimitStoreFailureMode,
-} from '../contracts.js';
+} from '../src/contracts.js';
 
 export type ExpressRateLimitOptions = Omit<RateLimitPolicy, 'keyResolver'> & {
   /** Optional store; MemoryStore is used when omitted. */
