@@ -1,4 +1,4 @@
-import type { RateLimitStore, RateLimitStoreResult } from './contracts.js';
+import type { RateLimitStore, RateLimitStoreResult } from '../src/contracts.js';
 
 export type RedisEvalClient = {
   eval(
