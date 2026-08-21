@@ -8,11 +8,11 @@ Shared, production-ready infrastructure for Xhovile applications.
 
 Applications should provide their own UI, identity/account integration, storage adapters, and product-specific configuration. Platform capabilities must remain application-agnostic.
 
-## Current capability
+## Current capabilities
 
 ### Authentication → Passkeys / WebAuthn
 
-Passkeys are the first production capability in Platform.
+Passkeys are a production capability in Platform.
 
 The reusable Passkey package lives under:
 
@@ -32,33 +32,49 @@ It provides the WebAuthn ceremony and verification layer for:
 
 The implementation uses SimpleWebAuthn and is intentionally independent of BuyMesho.
 
-### BuyMesho integration
+### Authentication → OTP
 
-BuyMesho is the first consumer of Platform Passkeys.
+OTP is a reusable one-time-password capability available through:
 
 ```text
-BuyMesho UI
-    ↓
-Xhovile Platform Passkeys
-    ↓
-WebAuthn verification
-    ↓
-BuyMesho PostgreSQL credential/challenge storage
-    ↓
+auth/otp/
+```
+
+Public consumers import it from:
+
+```ts
+import { issueOtp, verifyOtp } from "@xhovile/platform/otp";
+```
+
+The module provides:
+
+- secure OTP generation and hashing
+- challenge expiry and attempt semantics
+- single-use verification
+- application-owned persistence contracts
+- delivery-provider contracts
+- shared rate-limit integration
+- WhatsApp delivery through a concrete provider
+
+The application remains responsible for identity mapping, challenge storage implementation, rate-limit policy, delivery credentials/template configuration, and sessions.
+
+### BuyMesho integration
+
+BuyMesho is a consumer of Platform authentication capabilities.
+
+```text
+BuyMesho
+   ↓
+Xhovile Platform authentication capability
+   ↓
+verification
+   ↓
+BuyMesho identity/storage
+   ↓
 Firebase account/session
 ```
 
 BuyMesho-specific concerns such as Firebase identity, sessions, UI, and database adapters stay in BuyMesho rather than being moved into Platform.
-
-## Current Passkey behavior
-
-- A logged-in user can be offered Passkey setup after normal authentication.
-- A user with an existing BuyMesho Passkey is not offered setup again.
-- BuyMesho currently enforces one active Passkey per account.
-- Passwordless `Sign in with passkey` is supported.
-- WebAuthn origins support both `https://buymesho.app` and `https://www.buymesho.app`.
-- Logout performs a full page reload before returning to login so the next Passkey ceremony starts from a clean document state.
-- Settings contains the Passkey setup entry point; credential replacement/removal management is intentionally not yet implemented.
 
 ## What is intentionally not in Platform
 
@@ -70,7 +86,8 @@ Platform must not contain BuyMesho-specific UI, Firebase account logic, product 
 Platform/
 ├── auth/
 │   ├── passkeys/
-│   ├── 2fa/
+│   ├── otp/
+│   ├── TOTP/
 │   ├── sessions/
 │   └── recovery/
 ├── payments/
@@ -91,4 +108,5 @@ When a capability already works in a production application, move the reusable c
 
 Passkeys: **Production integration in BuyMesho — complete for the current scope.**
 
-Next major Platform work: extract and stabilize the next genuinely reusable capability from Xhovile applications (2FA, payments, messaging, notifications, etc.).
+OTP: **Reusable core, storage/delivery contracts, rate-limit integration, and WhatsApp provider implemented; consumer integration remains application-specific.**
+
