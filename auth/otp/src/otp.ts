@@ -45,9 +45,8 @@ function normalizeSecret(value: string, field: string): string {
 }
 
 function generateOtpCode(length: number): string {
-  const minimum = 10 ** (length - 1);
   const maximumExclusive = 10 ** length;
-  return String(randomInt(minimum, maximumExclusive)).padStart(length, "0");
+  return String(randomInt(0, maximumExclusive)).padStart(length, "0");
 }
 
 function hashOtpCode(code: string, salt: Buffer): string {
@@ -74,6 +73,7 @@ export function issueOtp(
   validatePolicy(policy);
 
   const normalizedSubject = normalizeSecret(subject, "OTP subject");
+  const normalizedChannel = normalizeSecret(channel, "OTP channel");
   const code = generateOtpCode(policy.codeLength);
   const salt = randomBytes(16);
   const createdAt = now.toISOString();
@@ -84,7 +84,7 @@ export function issueOtp(
     challenge: {
       id: randomUUID(),
       subject: normalizedSubject,
-      channel,
+      channel: normalizedChannel,
       codeHash: hashOtpCode(code, salt),
       salt: salt.toString("hex"),
       createdAt,
