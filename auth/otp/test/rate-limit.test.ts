@@ -30,9 +30,7 @@ test("maps OTP context into the existing rate limiter without choosing policy", 
 
   assert.equal(result.allowed, true);
   assert.deepEqual(observedContext, {
-    operation: undefined,
     subject: "+265888000000",
-    channel: undefined,
     ip: "203.0.113.10",
     userId: "user-123",
     route: "otp.issue.whatsapp",
@@ -41,7 +39,13 @@ test("maps OTP context into the existing rate limiter without choosing policy", 
 
 test("works with the real Platform rate limiter and leaves policy selection to the caller", async () => {
   const limiter = new RateLimiter(
-    fixedWindowPolicy("otp-example", 1, 60_000, "custom", ({ subject, route }) => `${route}:${subject}`),
+    fixedWindowPolicy(
+      "otp-example",
+      1,
+      60_000,
+      "custom",
+      ({ subject, route }) => `${route}:${subject}`,
+    ),
     new MemoryStore(),
   );
 
