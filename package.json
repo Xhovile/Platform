@@ -37,7 +37,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "npm run build && node --test dist/rate-limit/test/*.test.js",
+    "test": "npm run build && node --test dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js",
     "prepare": "npm run build"
   },
   "peerDependencies": {
