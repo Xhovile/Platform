@@ -1,15 +1,20 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "node:test";
 import { issueOtp, verifyOtp } from "../src/index.js";
 
 const NOW = new Date("2026-08-21T00:00:00.000Z");
 
 function issue() {
-  return issueOtp("+265888000000", "whatsapp", {
-    codeLength: 6,
-    ttlMs: 5 * 60 * 1000,
-    maxAttempts: 3,
-  }, NOW);
+  return issueOtp(
+    "+265888000000",
+    "whatsapp",
+    {
+      codeLength: 6,
+      ttlMs: 5 * 60 * 1000,
+      maxAttempts: 3,
+    },
+    NOW
+  );
 }
 
 test("issues a six-digit OTP without storing the plaintext code", () => {
@@ -71,7 +76,11 @@ test("increments failed attempts and locks after the configured maximum", () => 
 
 test("rejects an expired challenge", () => {
   const result = issue();
-  const expired = verifyOtp(result.challenge, result.code, new Date("2026-08-21T00:05:00.000Z"));
+  const expired = verifyOtp(
+    result.challenge,
+    result.code,
+    new Date("2026-08-21T00:05:00.000Z")
+  );
 
   assert.equal(expired.ok, false);
   if (!expired.ok) {
