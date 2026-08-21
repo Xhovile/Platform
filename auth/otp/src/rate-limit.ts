@@ -8,6 +8,7 @@ type OtpRateLimitOperation = "issue" | "verify";
 
 export type OtpRateLimitContext = {
   operation: OtpRateLimitOperation;
+  /** Destination/resource identifier; the application decides how to key it. */
   subject: string;
   channel: string;
   ip?: string;
