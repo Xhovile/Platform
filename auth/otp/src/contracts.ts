@@ -1,5 +1,4 @@
-export const OTP_CHANNELS = ["sms", "whatsapp", "email"] as const;
-export type OtpChannel = (typeof OTP_CHANNELS)[number];
+export type OtpChannel = string;
 
 export type OtpPolicy = {
   codeLength: number;
