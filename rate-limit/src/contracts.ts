@@ -25,6 +25,8 @@ export type RateLimitContext = {
   userId?: string;
   /** Canonical application route identifier. */
   route?: string;
+  /** Application-provided subject/resource identifier used by custom policies. */
+  subject?: string;
 };
 
 export type RateLimitKeyResolver = (
