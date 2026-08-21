@@ -39,13 +39,13 @@ test("maps OTP context into the existing rate limiter without choosing policy", 
 
 test("works with the real Platform rate limiter and leaves policy selection to the caller", async () => {
   const limiter = new RateLimiter(
-    fixedWindowPolicy(
-      "otp-example",
-      1,
-      60_000,
-      "custom",
-      ({ subject, route }) => `${route}:${subject}`,
-    ),
+    fixedWindowPolicy({
+      name: "otp-example",
+      limit: 1,
+      windowMs: 60_000,
+      key: "custom",
+      keyResolver: ({ subject, route }) => `${route}:${subject}`,
+    }),
     new MemoryStore(),
   );
 
