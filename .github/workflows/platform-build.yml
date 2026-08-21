@@ -22,3 +22,6 @@ jobs:
 
       - name: Build Platform
         run: npm run build
+
+      - name: Run tests
+        run: node --test dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js

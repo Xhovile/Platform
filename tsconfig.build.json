@@ -13,6 +13,8 @@
   },
   "include": [
     "auth/passkeys/src/**/*.ts",
+    "auth/otp/src/**/*.ts",
+    "auth/otp/test/**/*.ts",
     "rate-limit/src/**/*.ts",
     "rate-limit/express/**/*.ts",
     "rate-limit/redis/**/*.ts",
