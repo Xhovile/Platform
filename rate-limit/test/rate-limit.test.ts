@@ -105,6 +105,7 @@ test('concurrent requests are counted without exceeding the limit', async () => 
       key: 'ip',
     }),
     new MemoryStore(),
+    { now: () => 60_000 },
   );
 
   const results = await Promise.all(
