@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import type {
   OtpChallenge,
   OtpIssueResult,
@@ -17,8 +17,14 @@ const MIN_CODE_LENGTH = 4;
 const MAX_CODE_LENGTH = 9;
 
 function validatePolicy(policy: OtpPolicy): void {
-  if (!Number.isInteger(policy.codeLength) || policy.codeLength < MIN_CODE_LENGTH || policy.codeLength > MAX_CODE_LENGTH) {
-    throw new Error(`OTP code length must be an integer between ${MIN_CODE_LENGTH} and ${MAX_CODE_LENGTH}.`);
+  if (
+    !Number.isInteger(policy.codeLength) ||
+    policy.codeLength < MIN_CODE_LENGTH ||
+    policy.codeLength > MAX_CODE_LENGTH
+  ) {
+    throw new Error(
+      `OTP code length must be an integer between ${MIN_CODE_LENGTH} and ${MAX_CODE_LENGTH}.`
+    );
   }
 
   if (!Number.isSafeInteger(policy.ttlMs) || policy.ttlMs <= 0) {
@@ -39,15 +45,9 @@ function normalizeSecret(value: string, field: string): string {
 }
 
 function generateOtpCode(length: number): string {
-  const upperBound = 10 ** length;
   const minimum = 10 ** (length - 1);
-  const maximumExclusive = upperBound;
-
-  const value =
-    minimum +
-    Math.floor(Math.random() * (maximumExclusive - minimum));
-
-  return String(value).padStart(length, "0");
+  const maximumExclusive = 10 ** length;
+  return String(randomInt(minimum, maximumExclusive)).padStart(length, "0");
 }
 
 function hashOtpCode(code: string, salt: Buffer): string {
@@ -125,7 +125,10 @@ export function verifyOtp(
 
     return {
       ok: false,
-      reason: nextChallenge.attempts >= nextChallenge.maxAttempts ? "max-attempts" : "invalid-code",
+      reason:
+        nextChallenge.attempts >= nextChallenge.maxAttempts
+          ? "max-attempts"
+          : "invalid-code",
       challenge: nextChallenge,
     };
   }
