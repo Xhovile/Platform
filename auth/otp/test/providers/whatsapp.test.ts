@@ -20,7 +20,7 @@ test("sends an OTP as a WhatsApp text message", async () => {
     accessToken: "token-123",
     phoneNumberId: "phone-123",
     apiVersion: "v25.0",
-    fetch: async (url, init) => {
+    fetch: async (url, init = {}) => {
       calls.push({ url: String(url), init });
       return new Response(
         JSON.stringify({
@@ -42,7 +42,12 @@ test("sends an OTP as a WhatsApp text message", async () => {
     "https://graph.facebook.com/v25.0/phone-123/messages",
   );
   assert.equal(calls[0].init?.method, "POST");
-  assert.equal(calls[0].init?.headers && typeof calls[0].init.headers === "object" ? (calls[0].init.headers as Record<string, string>).Authorization : undefined, "Bearer token-123");
+  assert.equal(
+    calls[0].init?.headers && typeof calls[0].init.headers === "object"
+      ? (calls[0].init.headers as Record<string, string>).Authorization
+      : undefined,
+    "Bearer token-123",
+  );
 
   const body = JSON.parse(String(calls[0].init.body)) as Record<string, unknown>;
   assert.deepEqual(body, {
@@ -79,7 +84,7 @@ test("supports application-configured WhatsApp templates", async () => {
         },
       ],
     },
-    fetch: async (_url, init) => {
+    fetch: async (_url, init = {}) => {
       requestBody = JSON.parse(String(init.body)) as Record<string, unknown>;
       return new Response(JSON.stringify({ messages: [{ id: "wamid.template" }] }), {
         status: 200,
