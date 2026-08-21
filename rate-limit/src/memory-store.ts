@@ -26,11 +26,11 @@ export class MemoryStore implements RateLimitStore {
     if (!existing || existing.resetAt <= nowMs) {
       const next = { count: 1, resetAt };
       this.counters.set(key, next);
-      return next;
+      return { ...next };
     }
 
     existing.count += 1;
-    return existing;
+    return { ...existing };
   }
 
   /** Remove counters that have already expired. */
