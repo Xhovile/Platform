@@ -96,10 +96,10 @@ test('different policies do not share counters', async () => {
   assert.equal((await second.check({ userId: 'same-user' })).allowed, false);
 });
 
-test('rapid requests are counted without exceeding the limit', async () => {
+test('concurrent requests are counted without exceeding the limit', async () => {
   const limiter = new RateLimiter(
     fixedWindowPolicy({
-      name: 'rapid-requests',
+      name: 'concurrency',
       limit: 10,
       windowMs: 60_000,
       key: 'ip',
@@ -107,10 +107,9 @@ test('rapid requests are counted without exceeding the limit', async () => {
     new MemoryStore(),
   );
 
-  const results = [];
-  for (let index = 0; index < 20; index += 1) {
-    results.push(await limiter.check({ ip: '10.0.0.3' }));
-  }
+  const results = await Promise.all(
+    Array.from({ length: 20 }, () => limiter.check({ ip: '10.0.0.3' })),
+  );
 
   assert.equal(results.filter((result) => result.allowed).length, 10);
   assert.equal(results.filter((result) => !result.allowed).length, 10);
