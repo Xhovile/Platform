@@ -2,7 +2,7 @@ import type {
   RateLimitContext,
   RateLimitResult,
   RateLimiter,
-} from "../../rate-limit/src/index.js";
+} from "../../../rate-limit/src/index.js";
 
 type OtpRateLimitOperation = "issue" | "verify";
 
