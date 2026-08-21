@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MemoryStore, RateLimiter, fixedWindowPolicy } from "../../../rate-limit/src/index.js";
-import { checkOtpRateLimit } from "../src/rate-limit.js";
+import { checkOtpRateLimit, type OtpRateLimiter } from "../src/rate-limit.js";
 
 test("maps OTP context into the existing rate limiter without choosing policy", async () => {
-  let observedContext: Record<string, unknown> | undefined;
+  let observedContext: Parameters<OtpRateLimiter["check"]>[0] | undefined;
 
-  const limiter = {
-    check: async (context: Record<string, unknown>) => {
+  const limiter: OtpRateLimiter = {
+    check: async (context) => {
       observedContext = context;
       return {
         allowed: true,
