@@ -20,6 +20,10 @@
       "types": "./dist/auth/passkeys/src/browser.d.ts",
       "import": "./dist/auth/passkeys/src/browser.js"
     },
+    "./otp": {
+      "types": "./dist/auth/otp/src/index.d.ts",
+      "import": "./dist/auth/otp/src/index.js"
+    },
     "./rate-limit": {
       "types": "./dist/rate-limit/src/index.d.ts",
       "import": "./dist/rate-limit/src/index.js"
