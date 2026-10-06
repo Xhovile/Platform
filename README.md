@@ -4,7 +4,7 @@ Shared, production-ready infrastructure for Xhovile applications.
 
 ## What this repository is
 
-Xhovile/Platform is the home for reusable application infrastructure that should be built once, tested independently, and consumed by multiple Xhovile products.
+\`Xhovile/Platform\` is the home for reusable application infrastructure that should be built once, tested independently, and consumed by multiple Xhovile products.
 
 Applications should provide their own UI, identity/account integration, storage adapters, and product-specific configuration. Platform capabilities must remain application-agnostic.
 
@@ -16,29 +16,55 @@ Passkeys are a production capability in Platform.
 
 The reusable Passkey package lives under:
 
-\`auth/passkeys/\`
+~~~text
+auth/passkeys/
+~~~
 
-It provides the WebAuthn ceremony and verification layer for passwordless authentication, passkey registration, authentication, credential verification, challenge handling, browser helpers, and server-side verification contracts.
+It provides the WebAuthn ceremony and verification layer for:
+
+- discoverable/passwordless authentication
+- passkey registration
+- passkey authentication
+- credential verification
+- challenge/ceremony handling
+- browser helpers
+- server-side verification contracts
+
+The implementation uses SimpleWebAuthn and is intentionally independent of BuyMesho.
 
 ### Authentication → OTP
 
 OTP is a reusable one-time-password capability available through:
 
-\`auth/otp/\`
+~~~text
+auth/otp/
+~~~
 
 Public consumers import it from:
 
-\`import { issueOtp, verifyOtp } from "@xhovile/platform/otp";\`
+~~~ts
+import { issueOtp, verifyOtp } from "@xhovile/platform/otp";
+~~~
 
-The module provides secure OTP generation and hashing, challenge expiry and attempt semantics, single-use verification, application-owned persistence contracts, delivery-provider contracts, shared rate-limit integration, and WhatsApp delivery.
+The module provides:
 
-The consuming application remains responsible for identity mapping, challenge persistence implementation, rate-limit policy, delivery credentials/template configuration, and sessions.
+- secure OTP generation and hashing
+- challenge expiry and attempt semantics
+- single-use verification
+- application-owned persistence contracts
+- delivery-provider contracts
+- shared rate-limit integration
+- WhatsApp delivery through a concrete provider
+
+The application remains responsible for identity mapping, challenge storage implementation, rate-limit policy, delivery credentials/template configuration, and sessions.
 
 ### Caching
 
 Platform provides an infrastructure-free in-process TTL cache through:
 
-\`@xhovile/platform/cache\`
+~~~text
+@xhovile/platform/cache
+~~~
 
 The cache provides:
 
@@ -53,21 +79,53 @@ The implementation stores values in the application's process memory. It does no
 
 For browser applications, Platform also provides:
 
-\`@xhovile/platform/cache/browser\`
+~~~text
+@xhovile/platform/cache/browser
+~~~
 
-This uses browser \`localStorage\` with TTL metadata. Browser entries remain local to the user's device and are not shared with other users or backend instances.
+This uses browser localStorage with TTL metadata. Browser entries remain local to the user's device and are not shared with other users or backend instances.
 
 Neither cache is a source of truth. Applications must always be able to reload the underlying data when a cache entry is absent or expired.
 
 ### BuyMesho integration
 
-BuyMesho is a consumer of Platform capabilities.
+BuyMesho is a consumer of Platform authentication capabilities.
 
-BuyMesho-specific concerns such as Firebase identity, sessions, UI, database adapters, and product routes stay in BuyMesho rather than being moved into Platform.
+~~~text
+BuyMesho
+   ↓
+Xhovile Platform authentication capability
+   ↓
+verification
+   ↓
+BuyMesho identity/storage
+   ↓
+Firebase account/session
+~~~
+
+BuyMesho-specific concerns such as Firebase identity, sessions, UI, and database adapters stay in BuyMesho rather than being moved into Platform.
 
 ## What is intentionally not in Platform
 
 Platform must not contain BuyMesho-specific UI, Firebase account logic, product routes, or application-specific business rules.
+
+## Planned capabilities
+
+~~~text
+Platform/
+├── auth/
+│   ├── passkeys/
+│   ├── otp/
+│   ├── TOTP/
+│   ├── sessions/
+│   └── recovery/
+├── payments/
+├── messaging/
+├── notifications/
+└── shared/
+~~~
+
+These areas should be added when working implementations are extracted from products or when a capability has a clear reusable interface.
 
 ## Working principle
 
