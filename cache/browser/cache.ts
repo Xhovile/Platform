@@ -24,6 +24,8 @@ export class BrowserCache {
   private readonly storage: Storage | undefined;
   private readonly now: () => number;
   private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly keyVersions = new Map<string, number>();
+  private generation = 0;
 
   constructor(options: BrowserCacheOptions = {}) {
     const namespace = options.namespace?.trim();
@@ -97,6 +99,7 @@ export class BrowserCache {
 
   delete(key: string): boolean {
     this.validateKey(key);
+    this.invalidateInFlightKey(key);
 
     if (!this.storage) return false;
 
@@ -111,7 +114,7 @@ export class BrowserCache {
   }
 
   invalidate(prefix: string): number {
-    if (!prefix) {
+    if (!prefix.trim()) {
       throw new Error(
         'Browser cache invalidation prefix must not be empty.',
       );
@@ -131,6 +134,12 @@ export class BrowserCache {
 
       for (const storageKey of keysToDelete) {
         this.storage.removeItem(storageKey);
+      }
+
+      for (const key of this.inFlight.keys()) {
+        if (key.startsWith(prefix)) {
+          this.invalidateInFlightKey(key);
+        }
       }
 
       return keysToDelete.length;
@@ -153,23 +162,48 @@ export class BrowserCache {
     const existing = this.inFlight.get(key);
     if (existing) return (await existing) as T;
 
-    const loadPromise = (async () => {
+    const generation = this.generation;
+    const keyVersion = this.keyVersions.get(key) ?? 0;
+
+    let resolveLoad!: (value: T) => void;
+    let rejectLoad!: (reason: unknown) => void;
+    const loadPromise = new Promise<T>((resolve, reject) => {
+      resolveLoad = resolve;
+      rejectLoad = reject;
+    });
+
+    this.inFlight.set(key, loadPromise);
+
+    void (async () => {
       try {
         const value = await loader();
-        this.set(key, value, ttlMs);
-        return value;
+
+        if (
+          generation === this.generation &&
+          keyVersion === (this.keyVersions.get(key) ?? 0)
+        ) {
+          this.set(key, value, ttlMs);
+        }
+
+        resolveLoad(value);
+      } catch (error) {
+        rejectLoad(error);
       } finally {
         if (this.inFlight.get(key) === loadPromise) {
           this.inFlight.delete(key);
+          this.keyVersions.delete(key);
         }
       }
     })();
 
-    this.inFlight.set(key, loadPromise);
     return loadPromise;
   }
 
   clear(): void {
+    this.generation += 1;
+    this.inFlight.clear();
+    this.keyVersions.clear();
+
     if (!this.storage) return;
 
     const keysToDelete: string[] = [];
@@ -188,6 +222,12 @@ export class BrowserCache {
     } catch {
       // Best effort by design.
     }
+  }
+
+  private invalidateInFlightKey(key: string): void {
+    if (!this.inFlight.has(key)) return;
+
+    this.keyVersions.set(key, (this.keyVersions.get(key) ?? 0) + 1);
   }
 
   private toStorageKey(key: string): string {
