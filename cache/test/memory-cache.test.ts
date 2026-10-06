@@ -121,6 +121,23 @@ test('getOrSet handles synchronous loader throws without poisoning the key', asy
   assert.equal(value, 7);
 });
 
+test('set prevents an older in-flight load from overwriting a newer value', async () => {
+  const cache = new MemoryCache();
+  const load = deferred<string>();
+
+  const pending = cache.getOrSet(
+    'set-key',
+    () => load.promise,
+    { ttlMs: 10_000 },
+  );
+
+  await cache.set('set-key', 'fresh', { ttlMs: 10_000 });
+  load.resolve('stale');
+
+  assert.equal(await pending, 'stale');
+  assert.equal(await cache.get('set-key'), 'fresh');
+});
+
 test('delete prevents an older in-flight load from repopulating the entry', async () => {
   const cache = new MemoryCache();
   const load = deferred<string>();
