@@ -28,6 +28,8 @@ const listings = await cache.getOrSet(
 
 A cache hit returns the stored value without executing the loader. Concurrent misses for the same key are coalesced so that several requests arriving at the same time share one loader execution.
 
+Explicit cache mutations (`set`, `delete`, `invalidate`, and `clear`) prevent older in-flight loads from repopulating or overwriting entries after the mutation.
+
 Use prefix invalidation after writes:
 
 ~~~ts
@@ -56,7 +58,7 @@ const categories = await cache.getOrSet(
 );
 ~~~
 
-Browser cache data is stored in localStorage, is local to the current browser/device, and can reduce repeated backend requests for stable data. It should only be used for data that is safe to store client-side.
+Browser cache data is stored in localStorage, is local to the current browser/device, and can reduce repeated backend requests for stable data. Values should be JSON-safe and it should only be used for data that is safe to store client-side. Explicit browser cache mutations also prevent older in-flight loads from repopulating or overwriting entries after the mutation.
 
 ## Cache key and invalidation convention
 
