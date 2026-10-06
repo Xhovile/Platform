@@ -74,6 +74,7 @@ export class BrowserCache {
   set<T>(key: string, value: T, ttlMs: number): void {
     this.validateKey(key);
     this.validateTtl(ttlMs);
+    this.invalidateInFlightKey(key);
 
     if (!this.storage) return;
 
