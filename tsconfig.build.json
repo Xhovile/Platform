@@ -18,6 +18,9 @@
     "rate-limit/src/**/*.ts",
     "rate-limit/express/**/*.ts",
     "rate-limit/redis/**/*.ts",
-    "rate-limit/test/**/*.ts"
+    "rate-limit/test/**/*.ts",
+    "cache/src/**/*.ts",
+    "cache/browser/**/*.ts",
+    "cache/test/**/*.ts"
   ]
 }

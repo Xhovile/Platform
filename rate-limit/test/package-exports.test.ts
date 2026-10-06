@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import { MemoryStore, RateLimiter, perMinutePolicy } from '@xhovile/platform/rate-limit';
 import { rateLimit } from '@xhovile/platform/rate-limit/express';
 import { RedisStore } from '@xhovile/platform/rate-limit/redis';
+import { MemoryCache } from '@xhovile/platform/cache';
+import { BrowserCache } from '@xhovile/platform/cache/browser';
 
 test('package exports resolve for consumers', async () => {
   const limiter = new RateLimiter(
@@ -13,4 +15,6 @@ test('package exports resolve for consumers', async () => {
   assert.equal((await limiter.check({ userId: 'consumer' })).allowed, true);
   assert.equal(typeof rateLimit, 'function');
   assert.equal(typeof RedisStore, 'function');
+  assert.equal(typeof MemoryCache, 'function');
+  assert.equal(typeof BrowserCache, 'function');
 });

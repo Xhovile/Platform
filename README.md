@@ -4,7 +4,7 @@ Shared, production-ready infrastructure for Xhovile applications.
 
 ## What this repository is
 
-`Xhovile/Platform` is the home for reusable application infrastructure that should be built once, tested independently, and consumed by multiple Xhovile products.
+Xhovile/Platform is the home for reusable application infrastructure that should be built once, tested independently, and consumed by multiple Xhovile products.
 
 Applications should provide their own UI, identity/account integration, storage adapters, and product-specific configuration. Platform capabilities must remain application-agnostic.
 
@@ -16,9 +16,9 @@ Passkeys are a production capability in Platform.
 
 The reusable Passkey package lives under:
 
-```text
+~~~text
 auth/passkeys/
-```
+~~~
 
 It provides the WebAuthn ceremony and verification layer for:
 
@@ -36,15 +36,15 @@ The implementation uses SimpleWebAuthn and is intentionally independent of BuyMe
 
 OTP is a reusable one-time-password capability available through:
 
-```text
+~~~text
 auth/otp/
-```
+~~~
 
 Public consumers import it from:
 
-```ts
+~~~ts
 import { issueOtp, verifyOtp } from "@xhovile/platform/otp";
-```
+~~~
 
 The module provides:
 
@@ -58,11 +58,40 @@ The module provides:
 
 The application remains responsible for identity mapping, challenge storage implementation, rate-limit policy, delivery credentials/template configuration, and sessions.
 
+### Caching
+
+Platform provides an infrastructure-free in-process TTL cache through:
+
+~~~text
+@xhovile/platform/cache
+~~~
+
+The cache provides:
+
+- get, set, has, delete
+- getOrSet for cache-aside loading
+- prefix invalidation
+- TTL expiry
+- bounded memory with LRU-style eviction
+- concurrent miss coalescing
+
+The implementation stores values in the application's process memory. It does not require Redis, a separate database, a separate server, or a third-party cache provider.
+
+For browser applications, Platform also provides:
+
+~~~text
+@xhovile/platform/cache/browser
+~~~
+
+This uses browser localStorage with TTL metadata. Browser entries remain local to the user's device and are not shared with other users or backend instances.
+
+Neither cache is a source of truth. Applications must always be able to reload the underlying data when a cache entry is absent or expired.
+
 ### BuyMesho integration
 
 BuyMesho is a consumer of Platform authentication capabilities.
 
-```text
+~~~text
 BuyMesho
    ↓
 Xhovile Platform authentication capability
@@ -72,7 +101,7 @@ verification
 BuyMesho identity/storage
    ↓
 Firebase account/session
-```
+~~~
 
 BuyMesho-specific concerns such as Firebase identity, sessions, UI, and database adapters stay in BuyMesho rather than being moved into Platform.
 
@@ -82,7 +111,7 @@ Platform must not contain BuyMesho-specific UI, Firebase account logic, product 
 
 ## Planned capabilities
 
-```text
+~~~text
 Platform/
 ├── auth/
 │   ├── passkeys/
@@ -94,7 +123,7 @@ Platform/
 ├── messaging/
 ├── notifications/
 └── shared/
-```
+~~~
 
 These areas should be added when working implementations are extracted from products or when a capability has a clear reusable interface.
 
@@ -110,3 +139,4 @@ Passkeys: **Production integration in BuyMesho — complete for the current scop
 
 OTP: **Reusable core, storage/delivery contracts, rate-limit integration, and WhatsApp provider implemented; consumer integration remains application-specific.**
 
+Cache: **Infrastructure-free in-process server cache and browser-local cache implemented; application integration remains product-specific.**

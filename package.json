@@ -35,13 +35,21 @@
     "./rate-limit/redis": {
       "types": "./dist/rate-limit/redis/index.d.ts",
       "import": "./dist/rate-limit/redis/index.js"
+    },
+    "./cache": {
+      "types": "./dist/cache/src/index.d.ts",
+      "import": "./dist/cache/src/index.js"
+    },
+    "./cache/browser": {
+      "types": "./dist/cache/browser/index.d.ts",
+      "import": "./dist/cache/browser/index.js"
     }
   },
-  "files": ["dist", "auth", "rate-limit", "README.md", "docs"],
+  "files": ["dist", "auth", "rate-limit", "cache", "README.md", "docs"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "npm run build && node --test dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js",
+    "test": "npm run build && node --test dist/cache/test/*.test.js dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js",
     "prepare": "npm run build"
   },
   "peerDependencies": {
