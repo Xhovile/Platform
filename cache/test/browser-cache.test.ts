@@ -128,6 +128,24 @@ test('getOrSet clears failed in-flight loads so the key can be retried', async (
   assert.equal(value, 'recovered');
 });
 
+test('set prevents an older in-flight load from overwriting a newer value', async () => {
+  const storage = new MemoryStorage();
+  const cache = new BrowserCache({ storage, namespace: 'test' });
+  const load = deferred<string>();
+
+  const pending = cache.getOrSet(
+    'set-key',
+    () => load.promise,
+    10_000,
+  );
+
+  cache.set('set-key', 'fresh', 10_000);
+  load.resolve('stale');
+
+  assert.equal(await pending, 'stale');
+  assert.equal(cache.get('set-key'), 'fresh');
+});
+
 test('delete prevents an older in-flight load from repopulating the entry', async () => {
   const storage = new MemoryStorage();
   const cache = new BrowserCache({ storage, namespace: 'test' });
