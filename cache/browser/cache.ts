@@ -120,6 +120,12 @@ export class BrowserCache {
       );
     }
 
+    for (const key of this.inFlight.keys()) {
+      if (key.startsWith(prefix)) {
+        this.invalidateInFlightKey(key);
+      }
+    }
+
     if (!this.storage) return 0;
 
     const keysToDelete: string[] = [];
@@ -134,12 +140,6 @@ export class BrowserCache {
 
       for (const storageKey of keysToDelete) {
         this.storage.removeItem(storageKey);
-      }
-
-      for (const key of this.inFlight.keys()) {
-        if (key.startsWith(prefix)) {
-          this.invalidateInFlightKey(key);
-        }
       }
 
       return keysToDelete.length;
