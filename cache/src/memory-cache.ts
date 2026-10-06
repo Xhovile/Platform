@@ -95,7 +95,7 @@ export class MemoryCache implements Cache {
   }
 
   async invalidate(prefix: string): Promise<number> {
-    if (!prefix) {
+    if (!prefix.trim()) {
       throw new Error('Cache invalidation prefix must not be empty.');
     }
 
@@ -133,7 +133,16 @@ export class MemoryCache implements Cache {
     const generation = this.generation;
     const keyVersion = this.keyVersions.get(key) ?? 0;
 
-    const loadPromise = (async () => {
+    let resolveLoad!: (value: T) => void;
+    let rejectLoad!: (reason: unknown) => void;
+    const loadPromise = new Promise<T>((resolve, reject) => {
+      resolveLoad = resolve;
+      rejectLoad = reject;
+    });
+
+    this.inFlight.set(key, loadPromise);
+
+    void (async () => {
       try {
         const value = await loader();
 
@@ -144,7 +153,9 @@ export class MemoryCache implements Cache {
           await this.set(key, value, options);
         }
 
-        return value;
+        resolveLoad(value);
+      } catch (error) {
+        rejectLoad(error);
       } finally {
         if (this.inFlight.get(key) === loadPromise) {
           this.inFlight.delete(key);
@@ -153,7 +164,6 @@ export class MemoryCache implements Cache {
       }
     })();
 
-    this.inFlight.set(key, loadPromise);
     return loadPromise;
   }
 
