@@ -24,4 +24,4 @@ jobs:
         run: npm run build
 
       - name: Run tests
-        run: node --test dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js
+        run: node --test dist/cache/test/*.test.js dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js
