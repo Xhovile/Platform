@@ -4,7 +4,7 @@ Shared, production-ready infrastructure for Xhovile applications.
 
 ## What this repository is
 
-\`Xhovile/Platform\` is the home for reusable application infrastructure that should be built once, tested independently, and consumed by multiple Xhovile products.
+Xhovile/Platform is the home for reusable application infrastructure that should be built once, tested independently, and consumed by multiple Xhovile products.
 
 Applications should provide their own UI, identity/account integration, storage adapters, and product-specific configuration. Platform capabilities must remain application-agnostic.
 
