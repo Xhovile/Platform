@@ -1,11 +1,10 @@
-
 type BrowserCacheEntry = {
   value: unknown;
   expiresAt: number;
 };
 
 export type BrowserCacheOptions = {
-  /** Storage namespace. Defaults to xhovile:cache. */
+  /** Storage namespace. Defaults to xhovile:cache when omitted. */
   namespace?: string;
   /** Storage implementation. Defaults to browser localStorage. */
   storage?: Storage;
@@ -25,15 +24,19 @@ export class BrowserCache {
   private readonly storage: Storage | undefined;
   private readonly now: () => number;
   private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly keyVersions = new Map<string, number>();
+  private generation = 0;
 
   constructor(options: BrowserCacheOptions = {}) {
-    this.namespace = options.namespace?.trim() || 'xhovile:cache';
-    this.storage = options.storage ?? getLocalStorage();
-    this.now = options.now ?? Date.now;
+    const namespace = options.namespace?.trim();
 
-    if (!this.namespace) {
+    if (namespace === '') {
       throw new Error('Browser cache namespace must not be empty.');
     }
+
+    this.namespace = namespace ?? 'xhovile:cache';
+    this.storage = options.storage ?? getLocalStorage();
+    this.now = options.now ?? Date.now;
   }
 
   get<T>(key: string): T | undefined {
@@ -41,8 +44,9 @@ export class BrowserCache {
 
     if (!this.storage) return undefined;
 
+    const storageKey = this.toStorageKey(key);
+
     try {
-      const storageKey = this.toStorageKey(key);
       const raw = this.storage.getItem(storageKey);
       if (raw === null) return undefined;
 
@@ -58,6 +62,11 @@ export class BrowserCache {
 
       return entry.value as T;
     } catch {
+      try {
+        this.storage.removeItem(storageKey);
+      } catch {
+        // Ignore storage cleanup failures; caching remains best effort.
+      }
       return undefined;
     }
   }
@@ -65,6 +74,7 @@ export class BrowserCache {
   set<T>(key: string, value: T, ttlMs: number): void {
     this.validateKey(key);
     this.validateTtl(ttlMs);
+    this.invalidateInFlightKey(key);
 
     if (!this.storage) return;
 
@@ -90,6 +100,7 @@ export class BrowserCache {
 
   delete(key: string): boolean {
     this.validateKey(key);
+    this.invalidateInFlightKey(key);
 
     if (!this.storage) return false;
 
@@ -104,10 +115,16 @@ export class BrowserCache {
   }
 
   invalidate(prefix: string): number {
-    if (!prefix) {
+    if (!prefix.trim()) {
       throw new Error(
         'Browser cache invalidation prefix must not be empty.',
       );
+    }
+
+    for (const key of this.inFlight.keys()) {
+      if (key.startsWith(prefix)) {
+        this.invalidateInFlightKey(key);
+      }
     }
 
     if (!this.storage) return 0;
@@ -146,21 +163,48 @@ export class BrowserCache {
     const existing = this.inFlight.get(key);
     if (existing) return (await existing) as T;
 
-    const loadPromise = (async () => {
+    const generation = this.generation;
+    const keyVersion = this.keyVersions.get(key) ?? 0;
+
+    let resolveLoad!: (value: T) => void;
+    let rejectLoad!: (reason: unknown) => void;
+    const loadPromise = new Promise<T>((resolve, reject) => {
+      resolveLoad = resolve;
+      rejectLoad = reject;
+    });
+
+    this.inFlight.set(key, loadPromise);
+
+    void (async () => {
       try {
         const value = await loader();
-        this.set(key, value, ttlMs);
-        return value;
+
+        if (
+          generation === this.generation &&
+          keyVersion === (this.keyVersions.get(key) ?? 0)
+        ) {
+          this.set(key, value, ttlMs);
+        }
+
+        resolveLoad(value);
+      } catch (error) {
+        rejectLoad(error);
       } finally {
-        this.inFlight.delete(key);
+        if (this.inFlight.get(key) === loadPromise) {
+          this.inFlight.delete(key);
+          this.keyVersions.delete(key);
+        }
       }
     })();
 
-    this.inFlight.set(key, loadPromise);
     return loadPromise;
   }
 
   clear(): void {
+    this.generation += 1;
+    this.inFlight.clear();
+    this.keyVersions.clear();
+
     if (!this.storage) return;
 
     const keysToDelete: string[] = [];
@@ -179,6 +223,12 @@ export class BrowserCache {
     } catch {
       // Best effort by design.
     }
+  }
+
+  private invalidateInFlightKey(key: string): void {
+    if (!this.inFlight.has(key)) return;
+
+    this.keyVersions.set(key, (this.keyVersions.get(key) ?? 0) + 1);
   }
 
   private toStorageKey(key: string): string {

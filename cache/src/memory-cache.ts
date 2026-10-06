@@ -1,4 +1,3 @@
-
 import type {
   Cache,
   CacheSetOptions,
@@ -22,17 +21,22 @@ export type MemoryCacheOptions = {
  * Bounded in-process TTL cache with LRU-style eviction.
  *
  * This cache has no external infrastructure dependency. It is process-local:
- * values are lost when the process restarts and are not shared between
+ * values are lost when the process restarts and are not shared across
  * application instances.
  *
  * getOrSet() coalesces concurrent cache misses for the same key so multiple
  * requests do not all execute the same loader simultaneously.
+ *
+ * delete(), invalidate(), and clear() also prevent older in-flight loads from
+ * repopulating entries after an explicit cache mutation.
  */
 export class MemoryCache implements Cache {
   private readonly entries = new Map<string, CacheEntry<unknown>>();
   private readonly inFlight = new Map<string, Promise<unknown>>();
+  private readonly keyVersions = new Map<string, number>();
   private readonly maxEntries: number;
   private readonly now: () => number;
+  private generation = 0;
   private nextAccessOrder = 0;
 
   constructor(options: MemoryCacheOptions = {}) {
@@ -69,6 +73,7 @@ export class MemoryCache implements Cache {
   ): Promise<void> {
     this.validateKey(key);
     this.validateTtl(options.ttlMs);
+    this.invalidateInFlightKey(key);
 
     const now = this.now();
     this.entries.set(key, {
@@ -86,11 +91,12 @@ export class MemoryCache implements Cache {
 
   async delete(key: string): Promise<boolean> {
     this.validateKey(key);
+    this.invalidateInFlightKey(key);
     return this.entries.delete(key);
   }
 
   async invalidate(prefix: string): Promise<number> {
-    if (!prefix) {
+    if (!prefix.trim()) {
       throw new Error('Cache invalidation prefix must not be empty.');
     }
 
@@ -99,6 +105,12 @@ export class MemoryCache implements Cache {
     for (const key of this.entries.keys()) {
       if (key.startsWith(prefix) && this.entries.delete(key)) {
         removed += 1;
+      }
+    }
+
+    for (const key of this.inFlight.keys()) {
+      if (key.startsWith(prefix)) {
+        this.invalidateInFlightKey(key);
       }
     }
 
@@ -119,23 +131,48 @@ export class MemoryCache implements Cache {
     const existing = this.inFlight.get(key);
     if (existing) return (await existing) as T;
 
-    const loadPromise = (async () => {
+    const generation = this.generation;
+    const keyVersion = this.keyVersions.get(key) ?? 0;
+
+    let resolveLoad!: (value: T) => void;
+    let rejectLoad!: (reason: unknown) => void;
+    const loadPromise = new Promise<T>((resolve, reject) => {
+      resolveLoad = resolve;
+      rejectLoad = reject;
+    });
+
+    this.inFlight.set(key, loadPromise);
+
+    void (async () => {
       try {
         const value = await loader();
-        await this.set(key, value, options);
-        return value;
+
+        if (
+          generation === this.generation &&
+          keyVersion === (this.keyVersions.get(key) ?? 0)
+        ) {
+          await this.set(key, value, options);
+        }
+
+        resolveLoad(value);
+      } catch (error) {
+        rejectLoad(error);
       } finally {
-        this.inFlight.delete(key);
+        if (this.inFlight.get(key) === loadPromise) {
+          this.inFlight.delete(key);
+          this.keyVersions.delete(key);
+        }
       }
     })();
 
-    this.inFlight.set(key, loadPromise);
     return loadPromise;
   }
 
   async clear(): Promise<void> {
+    this.generation += 1;
     this.entries.clear();
     this.inFlight.clear();
+    this.keyVersions.clear();
   }
 
   /** Remove expired entries and return how many were removed. */
@@ -178,6 +215,12 @@ export class MemoryCache implements Cache {
       if (oldestKey === undefined) return;
       this.entries.delete(oldestKey);
     }
+  }
+
+  private invalidateInFlightKey(key: string): void {
+    if (!this.inFlight.has(key)) return;
+
+    this.keyVersions.set(key, (this.keyVersions.get(key) ?? 0) + 1);
   }
 
   private nextAccess(): number {
