@@ -73,6 +73,7 @@ export class MemoryCache implements Cache {
   ): Promise<void> {
     this.validateKey(key);
     this.validateTtl(options.ttlMs);
+    this.invalidateInFlightKey(key);
 
     const now = this.now();
     this.entries.set(key, {
