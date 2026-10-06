@@ -1,11 +1,10 @@
-
 type BrowserCacheEntry = {
   value: unknown;
   expiresAt: number;
 };
 
 export type BrowserCacheOptions = {
-  /** Storage namespace. Defaults to xhovile:cache. */
+  /** Storage namespace. Defaults to xhovile:cache when omitted. */
   namespace?: string;
   /** Storage implementation. Defaults to browser localStorage. */
   storage?: Storage;
@@ -27,13 +26,15 @@ export class BrowserCache {
   private readonly inFlight = new Map<string, Promise<unknown>>();
 
   constructor(options: BrowserCacheOptions = {}) {
-    this.namespace = options.namespace?.trim() || 'xhovile:cache';
-    this.storage = options.storage ?? getLocalStorage();
-    this.now = options.now ?? Date.now;
+    const namespace = options.namespace?.trim();
 
-    if (!this.namespace) {
+    if (namespace === '') {
       throw new Error('Browser cache namespace must not be empty.');
     }
+
+    this.namespace = namespace ?? 'xhovile:cache';
+    this.storage = options.storage ?? getLocalStorage();
+    this.now = options.now ?? Date.now;
   }
 
   get<T>(key: string): T | undefined {
@@ -41,8 +42,9 @@ export class BrowserCache {
 
     if (!this.storage) return undefined;
 
+    const storageKey = this.toStorageKey(key);
+
     try {
-      const storageKey = this.toStorageKey(key);
       const raw = this.storage.getItem(storageKey);
       if (raw === null) return undefined;
 
@@ -58,6 +60,11 @@ export class BrowserCache {
 
       return entry.value as T;
     } catch {
+      try {
+        this.storage.removeItem(storageKey);
+      } catch {
+        // Ignore storage cleanup failures; caching remains best effort.
+      }
       return undefined;
     }
   }
@@ -152,7 +159,9 @@ export class BrowserCache {
         this.set(key, value, ttlMs);
         return value;
       } finally {
-        this.inFlight.delete(key);
+        if (this.inFlight.get(key) === loadPromise) {
+          this.inFlight.delete(key);
+        }
       }
     })();
 
