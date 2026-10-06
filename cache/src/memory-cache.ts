@@ -8,7 +8,7 @@ import type {
 type CacheEntry<T> = {
   value: T;
   expiresAt: number;
-  lastAccessedAt: number;
+  accessOrder: number;
 };
 
 export type MemoryCacheOptions = {
@@ -33,6 +33,7 @@ export class MemoryCache implements Cache {
   private readonly inFlight = new Map<string, Promise<unknown>>();
   private readonly maxEntries: number;
   private readonly now: () => number;
+  private nextAccessOrder = 0;
 
   constructor(options: MemoryCacheOptions = {}) {
     const maxEntries = options.maxEntries ?? 1_000;
@@ -57,7 +58,7 @@ export class MemoryCache implements Cache {
       return undefined;
     }
 
-    entry.lastAccessedAt = now;
+    entry.accessOrder = this.nextAccess();
     return entry.value as T;
   }
 
@@ -73,7 +74,7 @@ export class MemoryCache implements Cache {
     this.entries.set(key, {
       value,
       expiresAt: now + options.ttlMs,
-      lastAccessedAt: now,
+      accessOrder: this.nextAccess(),
     });
 
     this.evictIfNeeded();
@@ -165,11 +166,11 @@ export class MemoryCache implements Cache {
 
     while (this.entries.size > this.maxEntries) {
       let oldestKey: string | undefined;
-      let oldestAccess = Number.POSITIVE_INFINITY;
+      let oldestAccessOrder = Number.POSITIVE_INFINITY;
 
       for (const [key, entry] of this.entries) {
-        if (entry.lastAccessedAt < oldestAccess) {
-          oldestAccess = entry.lastAccessedAt;
+        if (entry.accessOrder < oldestAccessOrder) {
+          oldestAccessOrder = entry.accessOrder;
           oldestKey = key;
         }
       }
@@ -177,6 +178,11 @@ export class MemoryCache implements Cache {
       if (oldestKey === undefined) return;
       this.entries.delete(oldestKey);
     }
+  }
+
+  private nextAccess(): number {
+    this.nextAccessOrder += 1;
+    return this.nextAccessOrder;
   }
 
   private validateKey(key: string): void {
