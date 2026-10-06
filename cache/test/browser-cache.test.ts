@@ -138,6 +138,7 @@ test('set prevents an older in-flight load from overwriting a newer value', asyn
     () => load.promise,
     10_000,
   );
+  await Promise.resolve();
 
   cache.set('set-key', 'fresh', 10_000);
   load.resolve('stale');
@@ -156,6 +157,7 @@ test('delete prevents an older in-flight load from repopulating the entry', asyn
     () => load.promise,
     10_000,
   );
+  await Promise.resolve();
 
   assert.equal(cache.delete('delete-key'), false);
   load.resolve('stale');
@@ -174,6 +176,7 @@ test('invalidate prevents an older in-flight load from repopulating the prefix',
     () => load.promise,
     10_000,
   );
+  await Promise.resolve();
 
   cache.set('listings:food:2', { id: 2 }, 10_000);
   assert.equal(cache.invalidate('listings:food:'), 1);
@@ -193,6 +196,7 @@ test('clear prevents pre-clear in-flight loads from repopulating the cache', asy
     () => load.promise,
     10_000,
   );
+  await Promise.resolve();
 
   cache.clear();
   load.resolve('stale');
