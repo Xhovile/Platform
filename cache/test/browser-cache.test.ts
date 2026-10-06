@@ -106,7 +106,7 @@ test('getOrSet clears failed in-flight loads so the key can be retried', async (
   await assert.rejects(
     cache.getOrSet(
       'retry-key',
-      async () => {
+      () => {
         loads += 1;
         throw new Error('loader failed');
       },
