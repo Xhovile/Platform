@@ -13,6 +13,7 @@ const approvedTestConfig: PayChanguDirectCardConfig = {
   pciDssApproved: true,
   paychanguSecretKey: 'test-secret',
   paychanguBaseUrl: 'https://api.paychangu.com',
+  allowedRedirectHosts: ['buymesho.app'],
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -113,6 +114,11 @@ test('direct card validation rejects malformed data before making a provider req
   await assert.rejects(
     () => initiatePayChanguDirectCardCharge(validCardInput({ amount: -1 }), approvedTestConfig),
     /amount must be positive/,
+  );
+
+  await assert.rejects(
+    () => initiatePayChanguDirectCardCharge(validCardInput({ redirectUrl: 'https://attacker.example/return' }), approvedTestConfig),
+    /host is not in the application allowlist/,
   );
 });
 
