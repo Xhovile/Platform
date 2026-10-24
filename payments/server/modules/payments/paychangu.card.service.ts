@@ -78,6 +78,9 @@ export function assertPayChanguDirectCardCheckoutAvailable(): DirectCardRuntimeC
   if (!truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_PCI_APPROVED)) {
     throw new Error("Direct card checkout requires confirmed PCI DSS approval and PayChangu account activation.");
   }
+  if (!truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED)) {
+    throw new Error("Direct card checkout is blocked until PayChangu's validate-charge/3-D Secure contract is confirmed and implemented.");
+  }
 
   const secret = process.env.PAYCHANGU_SECRET_KEY?.trim();
   if (!secret) throw new Error("Direct card checkout is missing its server-side PayChangu secret.");
