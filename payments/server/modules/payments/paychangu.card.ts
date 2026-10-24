@@ -57,6 +57,12 @@ function isEnabledFlag(value: string | undefined): boolean {
   return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
+function assertSecretAvailable(config: PayChanguDirectCardConfig): void {
+  if (!(config.paychanguSecretKey ?? process.env.PAYCHANGU_SECRET_KEY)?.trim()) {
+    throw new Error('Missing server-side PAYCHANGU_SECRET_KEY.');
+  }
+}
+
 function assertDirectCardAllowed(config: PayChanguDirectCardConfig): void {
   const enabled = config.enabled ?? isEnabledFlag(process.env.PAYCHANGU_DIRECT_CARD_ENABLED);
   const pciDssApproved = config.pciDssApproved ?? isEnabledFlag(process.env.PAYCHANGU_DIRECT_CARD_PCI_APPROVED);
@@ -67,9 +73,7 @@ function assertDirectCardAllowed(config: PayChanguDirectCardConfig): void {
   if (!pciDssApproved) {
     throw new Error('PayChangu Direct Card Charge requires PCI DSS approval and explicit account activation.');
   }
-  if (!(config.paychanguSecretKey ?? process.env.PAYCHANGU_SECRET_KEY)?.trim()) {
-    throw new Error('Missing server-side PAYCHANGU_SECRET_KEY.');
-  }
+  assertSecretAvailable(config);
 }
 
 function resolveBaseUrl(config: PayChanguDirectCardConfig): string {
@@ -278,7 +282,9 @@ export async function verifyPayChanguDirectCardCharge(
   input: { chargeId: string; expectedAmount: number; expectedCurrency: 'MWK' | 'USD' },
   config: PayChanguDirectCardConfig = {},
 ): Promise<PayChanguDirectCardVerification> {
-  assertDirectCardAllowed(config);
+  // Existing charges must remain verifiable for reconciliation even after new-charge
+  // feature/compliance gates are switched off. This path never initiates a charge.
+  assertSecretAvailable(config);
 
   if (!Number.isFinite(input.expectedAmount) || input.expectedAmount <= 0) {
     throw new Error('Invalid expected amount for Direct Card Charge verification.');
