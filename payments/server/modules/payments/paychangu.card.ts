@@ -95,9 +95,9 @@ function validateRedirectUrl(value: string, allowedHosts: string[]): string {
   if (url.protocol !== 'https:' || url.username || url.password) {
     throw new Error('Direct Card Charge redirect URL must use HTTPS and must not include credentials.');
   }
-  const hostname = url.hostname.toLowerCase().replace(/\\.$/, '');
+  const hostname = url.hostname.toLowerCase();
   const isAllowed = allowedHosts.some((allowedHost) => {
-    const normalized = allowedHost.trim().toLowerCase().replace(/\\.$/, '');
+    const normalized = allowedHost.trim().toLowerCase();
     return normalized.length > 0 && (hostname === normalized || hostname.endsWith('.' + normalized));
   });
   if (!allowedHosts.length || !isAllowed) {
