@@ -9,10 +9,10 @@ Implemented in paychangu.card.ts:
 - Separate initiation through POST /charge-card/payments.
 - Caller-supplied, stable charge IDs with a generator for new attempts.
 - Server-supplied amount/currency and basic card-field validation.
-- HTTPS checks for the return URL and PayChangu-owned 3-D Secure authentication URLs.
+- HTTPS checks for the return URL, an explicit application-owned host allowlist (PAYCHANGU_DIRECT_CARD_RETURN_HOSTS), and PayChangu-owned 3-D Secure authentication URLs.
 - Pending/3-D Secure result states; successful initiation is never treated as payment completion.
 - Verification through GET /charge-card/verify/{charge_id} with exact amount, currency, and optional returned charge-ID matching.
-- Explicit opt-in gates: PAYCHANGU_DIRECT_CARD_ENABLED=true and PAYCHANGU_DIRECT_CARD_PCI_APPROVED=true.
+- Explicit opt-in gates: PAYCHANGU_DIRECT_CARD_ENABLED=true and PAYCHANGU_DIRECT_CARD_PCI_APPROVED=true, plus PAYCHANGU_DIRECT_CARD_RETURN_HOSTS with the application's allowed HTTPS return hosts.
 - Tests cover request mapping, flag gates, 3-D Secure response handling, and verification mismatches. The adapter intentionally returns no raw provider response and does not log or persist PAN/CVV.
 
 ## Not yet a checkout feature
