@@ -5,6 +5,8 @@ export interface PayChanguDirectCardConfig {
   pciDssApproved?: boolean;
   paychanguSecretKey?: string;
   paychanguBaseUrl?: string;
+  /** Exact return hosts controlled by the calling application; can also be set via PAYCHANGU_DIRECT_CARD_RETURN_HOSTS. */
+  allowedRedirectHosts?: string[];
   fetcher?: typeof fetch;
 }
 
@@ -88,10 +90,18 @@ function validateChargeId(value: string): string {
   return id;
 }
 
-function validateRedirectUrl(value: string): string {
+function validateRedirectUrl(value: string, allowedHosts: string[]): string {
   const url = new URL(value);
-  if (url.protocol !== 'https:') {
-    throw new Error('Direct Card Charge redirect URL must use HTTPS.');
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new Error('Direct Card Charge redirect URL must use HTTPS and must not include credentials.');
+  }
+  const hostname = url.hostname.toLowerCase().replace(/\\.$/, '');
+  const isAllowed = allowedHosts.some((allowedHost) => {
+    const normalized = allowedHost.trim().toLowerCase().replace(/\\.$/, '');
+    return normalized && (hostname === normalized || hostname.endsWith('.' + normalized));
+  });
+  if (!allowedHosts.length || !isAllowed) {
+    throw new Error('Direct Card Charge redirect URL host is not in the application allowlist.');
   }
   return url.toString();
 }
@@ -181,7 +191,8 @@ export async function initiatePayChanguDirectCardCharge(
   }
 
   const chargeId = validateChargeId(input.chargeId);
-  const redirectUrl = validateRedirectUrl(input.redirectUrl);
+  const allowedRedirectHosts = config.allowedRedirectHosts ?? String(process.env.PAYCHANGU_DIRECT_CARD_RETURN_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean);
+  const redirectUrl = validateRedirectUrl(input.redirectUrl, allowedRedirectHosts);
   const card = validateCardInput(input);
   const secret = (config.paychanguSecretKey ?? process.env.PAYCHANGU_SECRET_KEY ?? '').trim();
   const baseUrl = resolveBaseUrl(config);
