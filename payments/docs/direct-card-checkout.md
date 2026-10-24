@@ -12,14 +12,16 @@ Implemented in paychangu.card.ts:
 - HTTPS checks for the return URL, an explicit application-owned host allowlist (PAYCHANGU_DIRECT_CARD_RETURN_HOSTS), and PayChangu-owned 3-D Secure authentication URLs.
 - Pending/3-D Secure result states; successful initiation is never treated as payment completion.
 - Verification through GET /charge-card/verify/{charge_id} with exact amount, currency, and optional returned charge-ID matching.
-- Explicit opt-in gates: PAYCHANGU_DIRECT_CARD_ENABLED=true and PAYCHANGU_DIRECT_CARD_PCI_APPROVED=true, plus PAYCHANGU_DIRECT_CARD_RETURN_HOSTS with the application's allowed HTTPS return hosts.
+- Explicit opt-in gates: PAYCHANGU_DIRECT_CARD_ENABLED=true and PAYCHANGU_DIRECT_CARD_PCI_APPROVED=true, plus PAYCHANGU_DIRECT_CARD_RETURN_HOSTS and PAYCHANGU_DIRECT_CARD_RESULT_HOSTS exact-host allowlists. Configure PAYCHANGU_DIRECT_CARD_RETURN_URL for the backend callback and PAYCHANGU_DIRECT_CARD_RESULT_URL for the app's payment-return page.
 - Tests cover request mapping, flag gates, 3-D Secure response handling, and verification mismatches. The adapter intentionally returns no raw provider response and does not log or persist PAN/CVV.
 
-## Not yet a checkout feature
+## Current integration boundary
 
-This milestone does not expose a route, add card inputs to the checkout UI, persist a Direct Card flow marker, implement a browser-return handler, or connect verified charges to order/escrow/ticket settlement. It must not be enabled for buyers yet. Standard Checkout remains unchanged.
+The backend now has a separate `paymentFlow: "direct_card"` branch in the existing checkout route, a durable `paychangu_card_charges` record, a provider return handler at `/api/payments/paychangu/direct-card/return`, and server-side verification that reuses BuyMesho's existing settlement service. Standard Checkout remains the default and its `tx_ref` verification path is unchanged.
 
-The next integration phase must persist a pending payment record and the generated charge_id before sending card data to PayChangu, then join verified card charges to the existing settlement state machine exactly once. Raw PAN and CVV must never be written to the payment record, logs, analytics, or error monitoring.
+The buyer-facing checkout UI has **not** been connected to this route yet. The direct-card route is disabled unless the explicit feature and PCI/account-approval gates are enabled and the callback/result URL allowlists are configured. Do not enable it for buyers until PayChangu confirms the validation/OTP contract and the merchant's PCI DSS approval/account activation.
+
+The payment row and card-charge record intentionally store no PAN/CVV or raw card form payload. Raw card data is passed to the provider adapter only for initiation and must never be written to payment records, logs, analytics, or error monitoring.
 
 ## Blocking API contract question
 
