@@ -12,6 +12,7 @@ import {
 const ENV_KEYS = [
   "PAYCHANGU_DIRECT_CARD_ENABLED",
   "PAYCHANGU_DIRECT_CARD_PCI_APPROVED",
+  "PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED",
   "PAYCHANGU_SECRET_KEY",
   "PAYCHANGU_BASE_URL",
   "PAYCHANGU_DIRECT_CARD_RETURN_URL",
@@ -35,6 +36,7 @@ function restoreEnv(saved: Record<string, string | undefined>): void {
 function setApprovedTestEnv(): void {
   process.env.PAYCHANGU_DIRECT_CARD_ENABLED = "true";
   process.env.PAYCHANGU_DIRECT_CARD_PCI_APPROVED = "true";
+  process.env.PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED = "true";
   process.env.PAYCHANGU_SECRET_KEY = "integration-secret-key";
   process.env.PAYCHANGU_BASE_URL = "https://api.paychangu.com";
   process.env.PAYCHANGU_DIRECT_CARD_RETURN_URL = "https://api.example.test/api/payments/paychangu/direct-card/return";
@@ -167,6 +169,45 @@ test("direct-card flow persists a charge before initiation and settles only afte
     assert.ok(settledOrder);
     assert.notEqual(settledOrder.status, "pending_payment");
     assert.equal(settledOrder.paymentReference, initiated.payment.reference);
+  } finally {
+    global.fetch = originalFetch;
+    restoreEnv(savedEnv);
+    clearPaymentState();
+  }
+});
+
+test("direct-card checkout remains blocked until PayChangu's validation contract is confirmed", async () => {
+  const savedEnv = saveEnv();
+  const originalFetch = global.fetch;
+  clearPaymentState();
+  setApprovedTestEnv();
+  delete process.env.PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED;
+  seedUnpaidOrder("order_direct_card_validation_gate_1");
+  global.fetch = (async () => {
+    throw new Error("Provider must not be called while the validation contract is unresolved.");
+  }) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () => createDirectCardCheckout({
+        orderId: "order_direct_card_validation_gate_1",
+        buyerId: "buyer_1",
+        amount: 1000,
+        currency: "MWK",
+        email: "buyer@example.com",
+        card: {
+          cardNumber: "4242 4242 4242 4242",
+          expiry: "12/30",
+          cvv: "123",
+          cardholderName: "Test Buyer",
+        },
+      }),
+      /blocked until PayChangu's validate-charge\/3-D Secure contract is confirmed/,
+    );
+
+    assert.equal(Boolean(refs.orderRepository.findById("order_direct_card_validation_gate_1")?.paymentReference), false);
+    const count = refs.getPaymentDb().prepare("SELECT COUNT(*) AS count FROM payments").get() as { count: number };
+    assert.equal(Number(count.count), 0);
   } finally {
     global.fetch = originalFetch;
     restoreEnv(savedEnv);
