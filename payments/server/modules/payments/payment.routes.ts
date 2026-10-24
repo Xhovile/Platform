@@ -284,7 +284,7 @@ export function createPaymentRouter(requireAuth: RequestHandler): express.Router
 
       const buyerUid = req.user.uid;
       const buyerEmail = req.user.email ?? "";
-      if (paymentFlow === "direct_card" && !/^\\S+@\\S+\\.\\S+$/.test(String(buyerEmail || ticketHolder.email).trim())) {
+      if (paymentFlow === "direct_card" && !/^\S+@\S+\.\S+$/.test(String(buyerEmail || ticketHolder.email).trim())) {
         return res.status(400).json({ error: "A valid buyer email is required for direct card checkout." });
       }
       const requestHash = buildCheckoutRequestHash({
