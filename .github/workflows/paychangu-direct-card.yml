@@ -29,7 +29,7 @@ jobs:
         run: npm install
 
       - name: Run Direct Card Charge adapter tests
-        run: npx --yes tsx --test payments/server/modules/payments/__tests__/paychangu.card.test.ts
+        run: npx --yes tsx --test payments/server/modules/payments/__tests__/paychangu.card.test.ts payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts
 
       - name: Syntax-check the payment lifecycle sources
         run: |
@@ -44,6 +44,7 @@ jobs:
             "payments/server/modules/payments/paychangu.card.service.ts",
             "payments/server/modules/payments/payment.routes.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.test.ts",
+            "payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.service.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.test.helpers.ts",
           ];
