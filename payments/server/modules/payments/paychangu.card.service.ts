@@ -71,6 +71,15 @@ export interface DirectCardRuntimeConfig {
   providerConfig: PayChanguDirectCardConfig;
 }
 
+function resolveDirectCardVerificationConfig(): PayChanguDirectCardConfig {
+  const secret = process.env.PAYCHANGU_SECRET_KEY?.trim();
+  if (!secret) throw new Error("Cannot verify a stored card charge without PAYCHANGU_SECRET_KEY.");
+  return {
+    paychanguSecretKey: secret,
+    paychanguBaseUrl: process.env.PAYCHANGU_BASE_URL,
+  };
+}
+
 export function assertPayChanguDirectCardCheckoutAvailable(): DirectCardRuntimeConfig {
   if (!truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_ENABLED)) {
     throw new Error("Direct card checkout is disabled.");
@@ -206,7 +215,7 @@ export async function createDirectCardCheckout(input: DirectCardCheckoutInput): 
       expiry: input.card.expiry,
       cvv: input.card.cvv,
       cardholderName: input.card.cardholderName,
-    }, runtime.providerConfig);
+    }, resolveDirectCardVerificationConfig());
   } catch {
     payChanguCardChargeRepository.updateByChargeId(chargeId, {
       status: "unknown",
@@ -249,7 +258,6 @@ export async function createDirectCardCheckout(input: DirectCardCheckoutInput): 
 }
 
 export async function verifyAndSettleDirectCardCharge(chargeId: string): Promise<DirectCardVerificationSummary> {
-  const runtime = assertPayChanguDirectCardCheckoutAvailable();
   const charge = payChanguCardChargeRepository.findByChargeId(chargeId);
   if (!charge) throw new Error("Direct Card Charge reference was not found.");
   const payment = await paymentRepository.findByReferenceAsync(charge.paymentReference);
