@@ -98,7 +98,7 @@ function validateRedirectUrl(value: string, allowedHosts: string[]): string {
   const hostname = url.hostname.toLowerCase();
   const isAllowed = allowedHosts.some((allowedHost) => {
     const normalized = allowedHost.trim().toLowerCase();
-    return normalized.length > 0 && (hostname === normalized || hostname.endsWith('.' + normalized));
+    return normalized.length > 0 && hostname === normalized;
   });
   if (!allowedHosts.length || !isAllowed) {
     throw new Error('Direct Card Charge redirect URL host is not in the application allowlist.');
