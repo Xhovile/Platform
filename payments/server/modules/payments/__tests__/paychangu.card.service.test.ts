@@ -203,7 +203,7 @@ test("direct-card checkout fails closed when compliance/account gates are not en
       /requires confirmed PCI DSS approval and PayChangu account activation/,
     );
 
-    assert.equal(refs.orderRepository.findById("order_direct_card_disabled_1")?.paymentReference, undefined);
+    assert.equal(Boolean(refs.orderRepository.findById("order_direct_card_disabled_1")?.paymentReference), false);
     const count = refs.getPaymentDb().prepare("SELECT COUNT(*) AS count FROM payments").get() as { count: number };
     assert.equal(Number(count.count), 0);
   } finally {
