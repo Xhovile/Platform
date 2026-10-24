@@ -139,6 +139,21 @@ function validateCardInput(input: PayChanguDirectCardInput): {
   };
 }
 
+/** Validate raw card fields without retaining them; never log the input. */
+export function validatePayChanguDirectCardFields(input: Pick<PayChanguDirectCardInput, "cardNumber" | "expiry" | "cvv" | "cardholderName">): void {
+  validateCardInput({
+    amount: 1,
+    currency: "MWK",
+    email: "validation@example.com",
+    redirectUrl: "https://example.com/return",
+    chargeId: "validation-only",
+    cardNumber: input.cardNumber,
+    expiry: input.expiry,
+    cvv: input.cvv,
+    cardholderName: input.cardholderName,
+  });
+}
+
 function parseAmount(value: unknown): number | undefined {
   if (typeof value !== 'string' && typeof value !== 'number') return undefined;
   const amount = Number(value);
