@@ -215,7 +215,7 @@ export async function createDirectCardCheckout(input: DirectCardCheckoutInput): 
       expiry: input.card.expiry,
       cvv: input.card.cvv,
       cardholderName: input.card.cardholderName,
-    }, resolveDirectCardVerificationConfig());
+    }, runtime.providerConfig);
   } catch {
     payChanguCardChargeRepository.updateByChargeId(chargeId, {
       status: "unknown",
@@ -276,7 +276,7 @@ export async function verifyAndSettleDirectCardCharge(chargeId: string): Promise
       chargeId: charge.chargeId,
       expectedAmount: charge.amount,
       expectedCurrency: charge.currency as "MWK" | "USD",
-    }, runtime.providerConfig);
+    }, resolveDirectCardVerificationConfig());
   } catch {
     const updatedCharge = payChanguCardChargeRepository.updateByChargeId(chargeId, {
       status: "unknown",
