@@ -1,44 +1,21 @@
-import { getPaymentDb } from "../../postgresCompat.js";
-import "./paychangu.card.schema.js";
+import type {
+  DirectCardChargePatch,
+  StoredPayChanguCardCharge,
+} from "./paychangu.card.contracts.js";
+import { ensurePayChanguCardChargeSchema, type PayChanguCardSchemaDatabase } from "./paychangu.card.schema.js";
 
-export type PayChanguCardChargeStatus =
-  | "pending"
-  | "requires_action"
-  | "pending_verification"
-  | "paid"
-  | "failed"
-  | "cancelled"
-  | "reversed"
-  | "unknown";
+export interface PayChanguCardStatement {
+  run(...values: unknown[]): unknown;
+  get(...values: unknown[]): unknown;
+}
 
-export interface StoredPayChanguCardCharge {
-  id: string;
-  orderId: string;
-  buyerId: string;
-  paymentReference: string;
-  chargeId: string;
-  amount: number;
-  currency: string;
-  status: PayChanguCardChargeStatus;
-  requires3dsAuth: boolean;
-  threeDsAuthUrl: string | null;
-  resultUrl: string;
-  providerOrderReference: string | null;
-  lastProviderStatus: string | null;
-  failureReason: string | null;
-  verifiedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+export interface PayChanguCardDatabase extends PayChanguCardSchemaDatabase {
+  prepare(sql: string): PayChanguCardStatement;
 }
 
 type ChargeRow = Record<string, unknown>;
-type ChargePatch = Partial<Pick<
-  StoredPayChanguCardCharge,
-  "status" | "requires3dsAuth" | "threeDsAuthUrl" | "providerOrderReference" |
-  "lastProviderStatus" | "failureReason" | "verifiedAt"
->>;
 
-const ALLOWED_TRANSITIONS: Readonly<Record<PayChanguCardChargeStatus, readonly PayChanguCardChargeStatus[]>> = {
+const ALLOWED_TRANSITIONS: Readonly<Record<StoredPayChanguCardCharge["status"], readonly StoredPayChanguCardCharge["status"][]>> = {
   pending: ["pending", "requires_action", "pending_verification", "failed", "cancelled", "unknown"],
   requires_action: ["requires_action", "pending_verification", "paid", "failed", "cancelled", "unknown"],
   pending_verification: ["pending_verification", "requires_action", "paid", "failed", "cancelled", "unknown"],
@@ -57,8 +34,8 @@ function rowToCharge(row: ChargeRow): StoredPayChanguCardCharge {
     paymentReference: String(row.payment_reference),
     chargeId: String(row.charge_id),
     amount: Number(row.amount),
-    currency: String(row.currency),
-    status: String(row.status) as PayChanguCardChargeStatus,
+    currency: String(row.currency) as "MWK" | "USD",
+    status: String(row.status) as StoredPayChanguCardCharge["status"],
     requires3dsAuth: row.requires_3ds_auth === true || Number(row.requires_3ds_auth) === 1,
     threeDsAuthUrl: row.three_ds_auth_url == null ? null : String(row.three_ds_auth_url),
     resultUrl: String(row.result_url),
@@ -71,23 +48,22 @@ function rowToCharge(row: ChargeRow): StoredPayChanguCardCharge {
   };
 }
 
-function assertTransition(from: PayChanguCardChargeStatus, to: PayChanguCardChargeStatus): void {
+function assertTransition(from: StoredPayChanguCardCharge["status"], to: StoredPayChanguCardCharge["status"]): void {
   if (!ALLOWED_TRANSITIONS[from]?.includes(to)) {
     throw new Error("Illegal PayChangu card charge state transition: " + from + " -> " + to);
   }
 }
 
+/**
+ * Storage adapter for the charge-tracking table. The application must still atomically
+ * bind the order, payment intent and charge row through its DirectCardCheckoutStore.
+ */
 export class PayChanguCardChargeRepository {
-  private get db() { return getPaymentDb(); }
+  constructor(private readonly db: PayChanguCardDatabase, initializeSchema = true) {
+    if (initializeSchema) ensurePayChanguCardChargeSchema(db);
+  }
 
-  create(input: Omit<StoredPayChanguCardCharge, "createdAt" | "updatedAt"> & { createdAt?: string; updatedAt?: string }): StoredPayChanguCardCharge {
-    const now = new Date().toISOString();
-    const record: StoredPayChanguCardCharge = {
-      ...input,
-      createdAt: input.createdAt ?? now,
-      updatedAt: input.updatedAt ?? now,
-    };
-
+  create(record: StoredPayChanguCardCharge): StoredPayChanguCardCharge {
     this.db.prepare(
       "INSERT INTO paychangu_card_charges (id, order_id, buyer_id, payment_reference, charge_id, amount, currency, status, requires_3ds_auth, three_ds_auth_url, result_url, provider_order_reference, last_provider_status, failure_reason, verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).run(
@@ -96,7 +72,6 @@ export class PayChanguCardChargeRepository {
       record.threeDsAuthUrl, record.resultUrl, record.providerOrderReference, record.lastProviderStatus,
       record.failureReason, record.verifiedAt, record.createdAt, record.updatedAt,
     );
-
     return record;
   }
 
@@ -110,7 +85,7 @@ export class PayChanguCardChargeRepository {
     return row ? rowToCharge(row) : undefined;
   }
 
-  updateByChargeId(chargeId: string, patch: ChargePatch): StoredPayChanguCardCharge | undefined {
+  updateByChargeId(chargeId: string, patch: DirectCardChargePatch): StoredPayChanguCardCharge | undefined {
     const current = this.findByChargeId(chargeId);
     if (!current) return undefined;
     const next: StoredPayChanguCardCharge = { ...current, ...patch, updatedAt: new Date().toISOString() };
@@ -122,7 +97,6 @@ export class PayChanguCardChargeRepository {
       next.status, next.requires3dsAuth ? 1 : 0, next.threeDsAuthUrl, next.providerOrderReference,
       next.lastProviderStatus, next.failureReason, next.verifiedAt, next.updatedAt, chargeId,
     );
-
     return next;
   }
 
@@ -130,5 +104,3 @@ export class PayChanguCardChargeRepository {
     this.db.prepare("DELETE FROM paychangu_card_charges").run();
   }
 }
-
-export const payChanguCardChargeRepository = new PayChanguCardChargeRepository();
