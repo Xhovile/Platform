@@ -12,16 +12,23 @@ Implemented in paychangu.card.ts:
 - HTTPS checks for the return URL, an explicit application-owned host allowlist (PAYCHANGU_DIRECT_CARD_RETURN_HOSTS), and PayChangu-owned 3-D Secure authentication URLs.
 - Pending/3-D Secure result states; successful initiation is never treated as payment completion.
 - Verification through GET /charge-card/verify/{charge_id} with exact amount, currency, and optional returned charge-ID matching.
-- Explicit opt-in gates: PAYCHANGU_DIRECT_CARD_ENABLED=true, PAYCHANGU_DIRECT_CARD_PCI_APPROVED=true, and PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED=true, plus PAYCHANGU_DIRECT_CARD_RETURN_HOSTS and PAYCHANGU_DIRECT_CARD_RESULT_HOSTS exact-host allowlists. The validation flag must remain false/unset until PayChangu's validate-charge/3-D Secure contract has been confirmed and implemented. Configure PAYCHANGU_DIRECT_CARD_RETURN_URL for the backend callback and PAYCHANGU_DIRECT_CARD_RESULT_URL for the app's payment-return page.
+- Explicit opt-in gates: PAYCHANGU_DIRECT_CARD_ENABLED=true, PAYCHANGU_DIRECT_CARD_PCI_APPROVED=true, and PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED=true, plus PAYCHANGU_DIRECT_CARD_RETURN_HOSTS and PAYCHANGU_DIRECT_CARD_RESULT_HOSTS exact-host allowlists. A concrete, reviewed DirectCardAuthorizationAdapter must also be registered by the consuming application. The validation flag must remain false/unset until PayChangu's validate-charge/3-D Secure contract has been confirmed and implemented. Configure PAYCHANGU_DIRECT_CARD_RETURN_URL for the backend callback and PAYCHANGU_DIRECT_CARD_RESULT_URL for the app's payment-return page.
 - Tests cover request mapping, flag gates, 3-D Secure response handling, and verification mismatches. The adapter intentionally returns no raw provider response and does not log or persist PAN/CVV.
 
 ## Current integration boundary
 
-The backend now has a separate `paymentFlow: "direct_card"` branch in the existing checkout route, a durable `paychangu_card_charges` record, a provider return handler at `/api/payments/paychangu/direct-card/return`, and server-side verification that reuses BuyMesho's existing settlement service. Standard Checkout remains the default and its `tx_ref` verification path is unchanged.
+The reusable Platform card core now consists of:
 
-The buyer-facing checkout UI has **not** been connected to this route yet. The direct-card route is disabled unless the feature, PCI/account-approval, and validation-contract gates are enabled and the callback/result URL allowlists are configured. Do not enable it for buyers until PayChangu confirms the validation/OTP contract and the merchant's PCI DSS approval/account activation.
+- a PayChangu provider adapter for `POST /charge-card/payments` and `GET /charge-card/verify/{charge_id}`;
+- app-neutral contracts for server-authoritative order lookup, atomic pending charge/payment creation, verification-state persistence, and idempotent verified settlement;
+- an explicit database schema initializer and charge-table repository that receive a database adapter rather than importing BuyMesho's database compatibility module;
+- a service orchestrator that depends on those contracts instead of importing BuyMesho-specific order, payment, escrow, or payout modules.
 
-The payment row and card-charge record intentionally store no PAN/CVV or raw card form payload. Raw card data is passed to the provider adapter only for initiation and must never be written to payment records, logs, analytics, or error monitoring.
+This deliberately removes the attempted product-specific checkout route from the Platform branch. **No application route or buyer-facing card form is connected yet.** The BuyMesho application must provide the store adapter for its existing order/payment/escrow/ticket workflow and a reviewed authorization adapter implementing PayChangu's confirmed validation contract. The store's verified-settlement method must be transactional and idempotent.
+
+New direct-card checkout remains blocked unless the explicit feature, PCI/account-approval, and validation-contract gates are enabled, a concrete authorization adapter is registered, and callback/result URL allowlists are configured. The validation flag is an engineering gate only; it is not proof that the needed endpoint has been implemented or approved.
+
+The charge-table record and payment contract intentionally exclude PAN/CVV and raw card payloads. Card data is sent to the provider adapter for initiation only and must never be written to payment records, logs, analytics, or error monitoring.
 
 ## Blocking API contract question
 
