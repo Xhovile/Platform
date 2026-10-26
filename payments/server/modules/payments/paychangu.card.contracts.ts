@@ -32,6 +32,7 @@ export interface StoredPayChanguCardCharge {
   currency: "MWK" | "USD";
   status: DirectCardStatus;
   requires3dsAuth: boolean;
+  authorizationCompleted: boolean;
   threeDsAuthUrl: string | null;
   resultUrl: string;
   providerOrderReference: string | null;
@@ -71,7 +72,7 @@ export interface DirectCardVerificationRecord {
 
 export type DirectCardChargePatch = Partial<Pick<
   StoredPayChanguCardCharge,
-  "status" | "requires3dsAuth" | "threeDsAuthUrl" | "providerOrderReference" |
+  "status" | "requires3dsAuth" | "authorizationCompleted" | "threeDsAuthUrl" | "providerOrderReference" |
   "lastProviderStatus" | "failureReason" | "verifiedAt"
 >>;
 
@@ -92,6 +93,8 @@ export interface DirectCardCheckoutStore {
    * This must not store the raw provider response or card data.
    */
   recordInitiationResult(chargeId: string, result: PayChanguDirectCardInitiation): Promise<DirectCardInitiationRecord>;
+  /** Persist successful 3-D Secure/validation completion so retries do not re-run it needlessly. */
+  recordAuthorizationResult(chargeId: string, result: { completed: boolean; failureReason?: string }): Promise<DirectCardVerificationRecord>;
   /**
    * Atomically persist non-success verification outcomes on both the charge and payment.
    */
