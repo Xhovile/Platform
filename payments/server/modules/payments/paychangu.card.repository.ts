@@ -37,6 +37,7 @@ function rowToCharge(row: ChargeRow): StoredPayChanguCardCharge {
     currency: String(row.currency) as "MWK" | "USD",
     status: String(row.status) as StoredPayChanguCardCharge["status"],
     requires3dsAuth: row.requires_3ds_auth === true || Number(row.requires_3ds_auth) === 1,
+    authorizationCompleted: row.authorization_completed === true || Number(row.authorization_completed) === 1,
     threeDsAuthUrl: row.three_ds_auth_url == null ? null : String(row.three_ds_auth_url),
     resultUrl: String(row.result_url),
     providerOrderReference: row.provider_order_reference == null ? null : String(row.provider_order_reference),
@@ -65,10 +66,10 @@ export class PayChanguCardChargeRepository {
 
   create(record: StoredPayChanguCardCharge): StoredPayChanguCardCharge {
     this.db.prepare(
-      "INSERT INTO paychangu_card_charges (id, order_id, buyer_id, payment_reference, charge_id, amount, currency, status, requires_3ds_auth, three_ds_auth_url, result_url, provider_order_reference, last_provider_status, failure_reason, verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO paychangu_card_charges (id, order_id, buyer_id, payment_reference, charge_id, amount, currency, status, requires_3ds_auth, authorization_completed, three_ds_auth_url, result_url, provider_order_reference, last_provider_status, failure_reason, verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).run(
       record.id, record.orderId, record.buyerId, record.paymentReference, record.chargeId,
-      record.amount, record.currency, record.status, record.requires3dsAuth ? 1 : 0,
+      record.amount, record.currency, record.status, record.requires3dsAuth ? 1 : 0, record.authorizationCompleted ? 1 : 0,
       record.threeDsAuthUrl, record.resultUrl, record.providerOrderReference, record.lastProviderStatus,
       record.failureReason, record.verifiedAt, record.createdAt, record.updatedAt,
     );
@@ -92,9 +93,9 @@ export class PayChanguCardChargeRepository {
     assertTransition(current.status, next.status);
 
     this.db.prepare(
-      "UPDATE paychangu_card_charges SET status = ?, requires_3ds_auth = ?, three_ds_auth_url = ?, provider_order_reference = ?, last_provider_status = ?, failure_reason = ?, verified_at = ?, updated_at = ? WHERE charge_id = ?",
+      "UPDATE paychangu_card_charges SET status = ?, requires_3ds_auth = ?, authorization_completed = ?, three_ds_auth_url = ?, provider_order_reference = ?, last_provider_status = ?, failure_reason = ?, verified_at = ?, updated_at = ? WHERE charge_id = ?",
     ).run(
-      next.status, next.requires3dsAuth ? 1 : 0, next.threeDsAuthUrl, next.providerOrderReference,
+      next.status, next.requires3dsAuth ? 1 : 0, next.authorizationCompleted ? 1 : 0, next.threeDsAuthUrl, next.providerOrderReference,
       next.lastProviderStatus, next.failureReason, next.verifiedAt, next.updatedAt, chargeId,
     );
     return next;
