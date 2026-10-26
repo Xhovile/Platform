@@ -21,6 +21,13 @@
     "rate-limit/test/**/*.ts",
     "cache/src/**/*.ts",
     "cache/browser/**/*.ts",
-    "cache/test/**/*.ts"
+    "cache/test/**/*.ts",
+    "payments/server/modules/payments/direct-card.ts",
+    "payments/server/modules/payments/paychangu.card.ts",
+    "payments/server/modules/payments/paychangu.card.contracts.ts",
+    "payments/server/modules/payments/paychangu.card.schema.ts",
+    "payments/server/modules/payments/paychangu.card.repository.ts",
+    "payments/server/modules/payments/paychangu.card.service.ts",
+    "payments/server/modules/payments/paychangu.card.routes.ts"
   ]
 }

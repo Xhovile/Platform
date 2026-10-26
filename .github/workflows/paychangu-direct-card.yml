@@ -1,0 +1,84 @@
+name: PayChangu Direct Card
+
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "tsconfig.build.json"
+      - "payments/tsconfig.direct-card.json"
+      - "payments/server/modules/payments/direct-card.ts"
+      - "payments/server/modules/payments/paychangu.card.ts"
+      - "payments/server/modules/payments/paychangu.card.contracts.ts"
+      - "payments/server/modules/payments/paychangu.card.schema.ts"
+      - "payments/server/modules/payments/paychangu.card.repository.ts"
+      - "payments/server/modules/payments/paychangu.card.service.ts"
+      - "payments/server/modules/payments/paychangu.card.routes.ts"
+      - "payments/server/modules/payments/__tests__/*.test.ts"
+      - "payments/docs/direct-card-checkout.md"
+      - ".github/workflows/paychangu-direct-card.yml"
+      - ".github/workflows/platform-build.yml"
+
+jobs:
+  adapter-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Platform dependencies
+        run: npm install
+
+      - name: Run Direct Card Charge tests
+        run: npx --yes tsx --test payments/server/modules/payments/__tests__/paychangu.card.test.ts payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts payments/server/modules/payments/__tests__/paychangu.card.service.test.ts
+
+      - name: Strict typecheck the isolated card core
+        run: npx tsc --project payments/tsconfig.direct-card.json
+
+      - name: Syntax-check the payment lifecycle sources
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import ts from "typescript";
+
+          const files = [
+            "payments/server/modules/payments/paychangu.card.ts",
+            "payments/server/modules/payments/paychangu.card.contracts.ts",
+            "payments/server/modules/payments/paychangu.card.schema.ts",
+            "payments/server/modules/payments/paychangu.card.repository.ts",
+            "payments/server/modules/payments/paychangu.card.service.ts",
+            "payments/server/modules/payments/paychangu.card.routes.ts",
+            "payments/server/modules/payments/direct-card.ts",
+            "payments/server/modules/payments/__tests__/paychangu.card.test.ts",
+            "payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts",
+            "payments/server/modules/payments/__tests__/paychangu.card.service.test.ts",
+          ];
+
+          const diagnostics = [];
+          for (const fileName of files) {
+            const source = fs.readFileSync(fileName, "utf8");
+            const result = ts.transpileModule(source, {
+              fileName,
+              reportDiagnostics: true,
+              compilerOptions: {
+                target: ts.ScriptTarget.ES2022,
+                module: ts.ModuleKind.ESNext,
+              },
+            });
+            diagnostics.push(...(result.diagnostics ?? []).map((diagnostic) => ({ fileName, diagnostic })));
+          }
+
+          const errors = diagnostics.filter(({ diagnostic }) => diagnostic.category === ts.DiagnosticCategory.Error);
+          if (errors.length) {
+            for (const { fileName, diagnostic } of errors) {
+              const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
+              process.stderr.write(fileName + ": " + message + "\n");
+            }
+            process.exit(1);
+          }
+          process.stdout.write("TypeScript syntax check passed for " + files.length + " payment lifecycle files.\n");
+          NODE

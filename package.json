@@ -43,13 +43,18 @@
     "./cache/browser": {
       "types": "./dist/cache/browser/index.d.ts",
       "import": "./dist/cache/browser/index.js"
+    },
+    "./payments/direct-card/server": {
+      "types": "./dist/payments/server/modules/payments/direct-card.d.ts",
+      "import": "./dist/payments/server/modules/payments/direct-card.js"
     }
   },
   "files": ["dist", "auth", "rate-limit", "cache", "README.md", "docs"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "test": "npm run build && node --test dist/cache/test/*.test.js dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js",
+    "test:direct-card-export": "node --input-type=module -e \"import('@xhovile/platform/payments/direct-card/server').then((api) => { if (typeof api.createPayChanguDirectCardService !== 'function' || typeof api.createPayChanguDirectCardRouter !== 'function') throw new Error('Direct Card package export is missing required entry points'); console.log('Direct Card package export smoke check passed'); })\"",
+    "test": "npm run build && node --test dist/cache/test/*.test.js dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js && npm run test:direct-card-export",
     "prepare": "npm run build"
   },
   "peerDependencies": {

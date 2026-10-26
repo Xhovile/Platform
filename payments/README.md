@@ -4,9 +4,11 @@
 
 `payments/` is the planned reusable payment infrastructure for Xhovile applications.
 
-This module is **documentation-only for now**. It intentionally does not contain an implementation yet.
+This module is in **staged implementation**. The existing payment/order sources under `payments/server` are still product-coupled extraction work, not yet a standalone, versioned Platform Payments package.
 
-The first implementation will be extracted from the production payment capabilities currently living in BuyMesho. The extraction should preserve proven behavior first, then harden and generalize the reusable payment core.
+The PayChangu Direct Card Charge branch adds a guarded provider adapter, app-neutral order/payment/settlement contracts, an injectable database schema/repository, and a service orchestrator. It includes an app-neutral Express route factory, but does not mount it in a product application. It is not buyer-ready: the consuming app's store and authorization adapters, buyer-facing UI, and end-to-end lifecycle tests remain to be integrated; PayChangu's validation/OTP contract is unresolved; and production is blocked on verified PCI DSS approval and merchant activation.
+
+BuyMesho remains the source of truth until the full Payments capability is extracted and proven. The extraction should preserve proven behavior first, then harden and generalize the reusable payment core.
 
 ## Extraction principle
 
