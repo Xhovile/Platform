@@ -3,13 +3,13 @@ name: PayChangu Direct Card
 on:
   pull_request:
     paths:
+      - "payments/tsconfig.direct-card.json"
       - "payments/server/modules/payments/paychangu.card.ts"
+      - "payments/server/modules/payments/paychangu.card.contracts.ts"
       - "payments/server/modules/payments/paychangu.card.schema.ts"
       - "payments/server/modules/payments/paychangu.card.repository.ts"
       - "payments/server/modules/payments/paychangu.card.service.ts"
-      - "payments/server/modules/payments/payment.routes.ts"
       - "payments/server/modules/payments/__tests__/*.test.ts"
-      - "payments/server/modules/payments/__tests__/paychangu.test.helpers.ts"
       - "payments/docs/direct-card-checkout.md"
       - ".github/workflows/paychangu-direct-card.yml"
 
@@ -28,8 +28,11 @@ jobs:
       - name: Install Platform dependencies
         run: npm install
 
-      - name: Run Direct Card Charge adapter tests
-        run: npx --yes tsx --test payments/server/modules/payments/__tests__/paychangu.card.test.ts payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts
+      - name: Run Direct Card Charge tests
+        run: npx --yes tsx --test payments/server/modules/payments/__tests__/paychangu.card.test.ts payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts payments/server/modules/payments/__tests__/paychangu.card.service.test.ts
+
+      - name: Strict typecheck the isolated card core
+        run: npx tsc --project payments/tsconfig.direct-card.json
 
       - name: Syntax-check the payment lifecycle sources
         run: |
@@ -39,14 +42,13 @@ jobs:
 
           const files = [
             "payments/server/modules/payments/paychangu.card.ts",
+            "payments/server/modules/payments/paychangu.card.contracts.ts",
             "payments/server/modules/payments/paychangu.card.schema.ts",
             "payments/server/modules/payments/paychangu.card.repository.ts",
             "payments/server/modules/payments/paychangu.card.service.ts",
-            "payments/server/modules/payments/payment.routes.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.service.test.ts",
-            "payments/server/modules/payments/__tests__/paychangu.test.helpers.ts",
           ];
 
           const diagnostics = [];
