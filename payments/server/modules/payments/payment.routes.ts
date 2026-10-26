@@ -10,14 +10,6 @@ import { getPaymentDb } from "../../postgresCompat.js";
 import { calculateCustomerCheckoutFees } from "../payouts/payout.policy.js";
 import { paymentWebhookHandler } from "./payment.webhooks.js";
 import { payoutWebhookHandler } from "../payouts/payout.webhooks.js";
-import {
-  assertPayChanguDirectCardCheckoutAvailable,
-  buildDirectCardResultRedirect,
-  createDirectCardCheckout,
-  verifyAndSettleDirectCardCharge,
-} from "./paychangu.card.service.js";
-import { payChanguCardChargeRepository } from "./paychangu.card.repository.js";
-import { validatePayChanguDirectCardFields } from "./paychangu.card.js";
 
 export { payoutWebhookHandler };
 
@@ -154,7 +146,6 @@ function normalizeIdempotencyKey(value: unknown): string {
 function buildCheckoutRequestHash(input: {
   requestedItems: CheckoutItemInput[];
   method: unknown;
-  paymentFlow: unknown;
   settlementRoute: unknown;
   returnUrl: unknown;
   cancelUrl: unknown;
@@ -169,7 +160,6 @@ function buildCheckoutRequestHash(input: {
       quantity: Number(item.quantity ?? 1),
     })),
     method: String(input.method ?? "mobile_money"),
-    paymentFlow: String(input.paymentFlow ?? "standard_checkout"),
     settlementRoute: String(input.settlementRoute ?? "escrow"),
     returnUrl: String(input.returnUrl ?? ""),
     cancelUrl: String(input.cancelUrl ?? ""),
@@ -203,9 +193,6 @@ function idempotentCheckoutResponse(order: ReturnType<typeof orderRepository.fin
       orderId: order.id,
       paymentId: payment.id,
       reference: payment.reference,
-      paymentFlow: payment.rawResponse?.paymentFlow === "direct_card" ? "direct_card" : "standard_checkout",
-      requiresAction: payment.status === "requires_action",
-      paymentVerified: Boolean(payment.verified),
       checkoutUrl: payment.checkoutUrl ?? null,
       payment,
       order,
@@ -227,37 +214,8 @@ export function createPaymentRouter(requireAuth: RequestHandler): express.Router
       const listingId = body.listingId;
       const quantity = body.quantity ?? 1;
       const items = Array.isArray(body.items) ? (body.items as CheckoutItemInput[]) : [];
-      const paymentFlow = body.paymentFlow ?? "standard_checkout";
-      if (paymentFlow !== "standard_checkout" && paymentFlow !== "direct_card") {
-        return res.status(400).json({ error: "paymentFlow must be standard_checkout or direct_card" });
-      }
-      const method = paymentFlow === "direct_card" ? "card" : body.method ?? "mobile_money";
+      const method = body.method ?? "mobile_money";
       const settlementRoute = body.settlementRoute ?? "escrow";
-      let directCardDetails: { cardNumber: string; expiry: string; cvv: string; cardholderName: string } | null = null;
-
-      if (paymentFlow === "direct_card") {
-        try {
-          assertPayChanguDirectCardCheckoutAvailable();
-        } catch {
-          return res.status(503).json({ error: "Direct card checkout is not enabled or is missing required server configuration." });
-        }
-
-        const card = body.cardDetails;
-        if (!card || typeof card !== "object" || Array.isArray(card)) {
-          return res.status(400).json({ error: "cardDetails are required for direct card checkout" });
-        }
-        directCardDetails = {
-          cardNumber: typeof card.cardNumber === "string" ? card.cardNumber : "",
-          expiry: typeof card.expiry === "string" ? card.expiry : "",
-          cvv: typeof card.cvv === "string" ? card.cvv : "",
-          cardholderName: typeof card.cardholderName === "string" ? card.cardholderName : "",
-        };
-        try {
-          validatePayChanguDirectCardFields(directCardDetails);
-        } catch (error) {
-          return res.status(400).json({ error: error instanceof Error ? error.message : "Invalid card details" });
-        }
-      }
       const returnUrl = body.returnUrl;
       const cancelUrl = body.cancelUrl;
       const buyerName = body.buyerName;
@@ -286,14 +244,9 @@ export function createPaymentRouter(requireAuth: RequestHandler): express.Router
       }
 
       const buyerUid = req.user.uid;
-      const buyerEmail = req.user.email ?? "";
-      if (paymentFlow === "direct_card" && !/^\S+@\S+\.\S+$/.test(String(buyerEmail || ticketHolder.email).trim())) {
-        return res.status(400).json({ error: "A valid buyer email is required for direct card checkout." });
-      }
       const requestHash = buildCheckoutRequestHash({
         requestedItems,
         method,
-        paymentFlow,
         settlementRoute,
         returnUrl,
         cancelUrl,
@@ -318,6 +271,7 @@ export function createPaymentRouter(requireAuth: RequestHandler): express.Router
       const db: any = getPaymentDb();
       const currency = "MWK";
       const now = new Date().toISOString();
+      const buyerEmail = req.user.email ?? "";
       const orderId = `ord_${randomUUID()}`;
       const orderItems: any[] = [];
       const listingIds: string[] = [];
@@ -480,34 +434,6 @@ export function createPaymentRouter(requireAuth: RequestHandler): express.Router
         throw error;
       }
 
-      if (paymentFlow === "direct_card") {
-        const directCardResult = await createDirectCardCheckout({
-          orderId,
-          buyerId: buyerUid,
-          amount: feeBreakdown.finalTotalAmount,
-          currency,
-          email: String(buyerEmail || ticketHolder.email).trim().toLowerCase(),
-          card: directCardDetails!,
-        });
-        return res.status(201).json({
-          success: true,
-          paymentFlow: "direct_card",
-          orderId,
-          paymentId: directCardResult.payment.id,
-          reference: directCardResult.payment.reference,
-          checkoutUrl: directCardResult.checkoutUrl,
-          requiresAction: directCardResult.requiresAction,
-          paymentVerified: directCardResult.paymentVerified,
-          payment: directCardResult.payment,
-          order: orderRepository.findById(orderId),
-          totals: {
-            subtotal: total,
-            total: feeBreakdown.finalTotalAmount,
-            fees: feeBreakdown.payChanguTransactionFeeAmount,
-          },
-        });
-      }
-
       const paymentResult = await serverPaymentService.createPayment({
         orderId,
         provider: "paychangu",
@@ -580,20 +506,11 @@ export function createPaymentRouter(requireAuth: RequestHandler): express.Router
         ["captured", "paid"].includes(paymentStatus) ||
         ["paid", "processing", "in_escrow"].includes(orderStatus);
 
-      const paymentReference = payment?.reference ?? order?.paymentReference ?? reference;
-      const directCardCharge = payChanguCardChargeRepository.findByPaymentReference(paymentReference);
-      if (directCardCharge) {
-        if (!["paid", "failed", "cancelled", "reversed"].includes(directCardCharge.status)) {
-          try {
-            await verifyAndSettleDirectCardCharge(directCardCharge.chargeId);
-            ({ payment, order } = resolvePublicPaymentState(reference));
-          } catch {
-            // A temporary provider failure must not be treated as payment success.
-          }
-        }
-      } else if (!isAlreadySuccessful) {
+      if (!isAlreadySuccessful) {
         try {
-          await serverPaymentService.verifyPayChanguPayment(paymentReference);
+          await serverPaymentService.verifyPaychanguPayment(
+            payment?.reference ?? order?.paymentReference ?? reference,
+          );
           ({ payment, order } = resolvePublicPaymentState(reference));
         } catch (verificationError) {
           const message = verificationError instanceof Error ? verificationError.message : "Payment verification failed";
@@ -605,30 +522,6 @@ export function createPaymentRouter(requireAuth: RequestHandler): express.Router
     } catch (error) {
       return res.status(500).json(jsonError(error, "Failed to fetch public status"));
     }
-  });
-
-  router.get("/paychangu/direct-card/return", async (req, res) => {
-    const chargeId = typeof req.query.charge_id === "string" ? req.query.charge_id.trim() : "";
-    if (!chargeId) {
-      return res.status(400).json({ error: "Direct Card Charge identifier is required" });
-    }
-
-    const storedCharge = payChanguCardChargeRepository.findByChargeId(chargeId);
-    if (!storedCharge) {
-      return res.status(404).json({ error: "Direct Card Charge was not found" });
-    }
-
-    let resultStatus: "paid" | "pending" | "failed" | "unknown" = "unknown";
-    let latestCharge = storedCharge;
-    try {
-      const verification = await verifyAndSettleDirectCardCharge(chargeId);
-      resultStatus = verification.status;
-      latestCharge = verification.charge;
-    } catch {
-      // Provider query parameters are hints only; verification remains server-authoritative.
-    }
-
-    return res.redirect(303, buildDirectCardResultRedirect(latestCharge, resultStatus));
   });
 
   router.post("/webhooks/paychangu", async (req, res) => {
