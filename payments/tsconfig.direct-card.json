@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": [
+    "server/modules/payments/paychangu.card.ts",
+    "server/modules/payments/paychangu.card.contracts.ts",
+    "server/modules/payments/paychangu.card.schema.ts",
+    "server/modules/payments/paychangu.card.repository.ts",
+    "server/modules/payments/paychangu.card.service.ts",
+    "server/modules/payments/__tests__/paychangu.card.test.ts",
+    "server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts",
+    "server/modules/payments/__tests__/paychangu.card.service.test.ts"
+  ]
+}
