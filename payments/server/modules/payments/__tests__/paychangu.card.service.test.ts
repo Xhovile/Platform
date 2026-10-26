@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createPayChanguDirectCardService,
-  type DirectCardServiceDependencies,
 } from "../paychangu.card.service.js";
 import type {
   DirectCardCheckoutStore,
@@ -11,7 +10,13 @@ import type {
   StoredPayChanguCardCharge,
   DirectCardChargePatch,
   DirectCardAuthorizationAdapter,
+  DirectCardInitiationRecord,
+  DirectCardVerificationRecord,
 } from "../paychangu.card.contracts.js";
+import type {
+  PayChanguDirectCardInitiation,
+  PayChanguDirectCardVerification,
+} from "../paychangu.card.js";
 
 const ENV_KEYS = [
   "PAYCHANGU_DIRECT_CARD_ENABLED",
@@ -96,6 +101,7 @@ class FakeDirectCardStore implements DirectCardCheckoutStore {
       currency: input.order.currency,
       status: "pending",
       requires3dsAuth: false,
+      authorizationCompleted: false,
       threeDsAuthUrl: null,
       resultUrl: input.resultUrl,
       providerOrderReference: null,
@@ -131,44 +137,98 @@ class FakeDirectCardStore implements DirectCardCheckoutStore {
     return charge ? { ...charge } : null;
   }
 
-  async updateCharge(chargeId: string, patch: DirectCardChargePatch): Promise<StoredPayChanguCardCharge | null> {
+  async recordInitiationResult(chargeId: string, result: PayChanguDirectCardInitiation): Promise<DirectCardInitiationRecord> {
     const current = this.charges.get(chargeId);
-    if (!current) return null;
-    const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
-    this.charges.set(chargeId, updated);
-    return { ...updated };
-  }
-
-  async recordVerification(
-    charge: StoredPayChanguCardCharge,
-    result: { chargeId: string; verified: boolean; status: string; failureReason?: string },
-  ): Promise<DirectCardPaymentSummary> {
-    const current = this.payments.get(charge.paymentReference);
     assert.ok(current);
-    const updated: DirectCardPaymentSummary = {
+    const charge: StoredPayChanguCardCharge = {
       ...current,
-      status: result.status === "failed" || result.status === "reversed" ? "failed" : "pending_verification",
+      status: result.requires3dsAuth ? "requires_action" : "pending_verification",
+      requires3dsAuth: result.requires3dsAuth,
+      threeDsAuthUrl: result.threeDsAuthUrl ?? null,
+      providerOrderReference: result.providerOrderReference ?? null,
+      failureReason: null,
+      updatedAt: new Date().toISOString(),
+    };
+    this.charges.set(chargeId, charge);
+    const currentPayment = this.payments.get(charge.paymentReference);
+    assert.ok(currentPayment);
+    const payment: DirectCardPaymentSummary = {
+      ...currentPayment,
+      status: result.requires3dsAuth ? "requires_action" : "pending_verification",
       verified: false,
     };
-    this.payments.set(charge.paymentReference, updated);
-    return { ...updated };
+    this.payments.set(charge.paymentReference, payment);
+    return { charge: { ...charge }, payment: { ...payment } };
   }
 
-  async settleVerifiedCharge(
-    charge: StoredPayChanguCardCharge,
-    result: { chargeId: string; verified: boolean; status: string },
-  ): Promise<DirectCardPaymentSummary> {
-    assert.equal(result.verified, true);
-    const current = this.payments.get(charge.paymentReference);
+  async recordAuthorizationResult(chargeId: string, result: { completed: boolean; failureReason?: string }): Promise<DirectCardVerificationRecord> {
+    const current = this.charges.get(chargeId);
     assert.ok(current);
-    if (current.verified) return { ...current };
-    const paidCharge = { ...charge, status: "paid" as const, failureReason: null, verifiedAt: new Date().toISOString() };
-    this.charges.set(charge.chargeId, paidCharge);
-    const paidPayment: DirectCardPaymentSummary = { ...current, status: "captured", verified: true };
-    this.payments.set(charge.paymentReference, paidPayment);
+    const charge: StoredPayChanguCardCharge = {
+      ...current,
+      authorizationCompleted: result.completed,
+      status: "pending_verification",
+      failureReason: result.failureReason ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    this.charges.set(chargeId, charge);
+    const currentPayment = this.payments.get(charge.paymentReference);
+    assert.ok(currentPayment);
+    const payment = { ...currentPayment, status: "pending_verification" as const, verified: false };
+    this.payments.set(charge.paymentReference, payment);
+    return { charge: { ...charge }, payment: { ...payment } };
+  }
+
+  async recordVerification(chargeId: string, result: PayChanguDirectCardVerification): Promise<DirectCardVerificationRecord> {
+    const current = this.charges.get(chargeId);
+    assert.ok(current);
+    const nextStatus =
+      result.status === "failed" || result.status === "reversed"
+        ? "failed"
+        : result.status === "pending"
+          ? "pending_verification"
+          : "unknown";
+    const charge: StoredPayChanguCardCharge = {
+      ...current,
+      status: nextStatus,
+      lastProviderStatus: result.status,
+      failureReason: result.failureReason ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    this.charges.set(chargeId, charge);
+    const currentPayment = this.payments.get(charge.paymentReference);
+    assert.ok(currentPayment);
+    const payment: DirectCardPaymentSummary = {
+      ...currentPayment,
+      status: nextStatus,
+      verified: false,
+    };
+    this.payments.set(charge.paymentReference, payment);
+    return { charge: { ...charge }, payment: { ...payment } };
+  }
+
+  async settleVerifiedCharge(chargeId: string, result: PayChanguDirectCardVerification): Promise<DirectCardVerificationRecord> {
+    assert.equal(result.verified, true);
+    const current = this.charges.get(chargeId);
+    assert.ok(current);
+    const currentPayment = this.payments.get(current.paymentReference);
+    assert.ok(currentPayment);
+    if (currentPayment.verified) return { charge: { ...current }, payment: { ...currentPayment } };
+    const charge: StoredPayChanguCardCharge = {
+      ...current,
+      status: "paid",
+      lastProviderStatus: result.status,
+      authorizationCompleted: true,
+      failureReason: null,
+      verifiedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.charges.set(chargeId, charge);
+    const payment: DirectCardPaymentSummary = { ...currentPayment, status: "captured", verified: true };
+    this.payments.set(charge.paymentReference, payment);
     this.order.status = "in_escrow";
     this.settlementCount += 1;
-    return { ...paidPayment };
+    return { charge: { ...charge }, payment: { ...payment } };
   }
 }
 
@@ -193,7 +253,7 @@ function createAuthorizationAdapter(calls: Array<Record<string, unknown>>): Dire
   };
 }
 
-test("direct-card service creates the pending records before initiation and settles after verified return", async () => {
+test("direct-card service persists the charge before initiation and settles only after server verification", async () => {
   const savedEnv = saveEnv();
   const originalFetch = global.fetch;
   const store = new FakeDirectCardStore();
