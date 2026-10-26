@@ -32,4 +32,7 @@ export function ensurePayChanguCardChargeSchema(db: PayChanguCardSchemaDatabase)
     CREATE INDEX IF NOT EXISTS idx_paychangu_card_charges_status_updated
       ON paychangu_card_charges (status, updated_at DESC);
   `);
+
+  db.exec("ALTER TABLE paychangu_card_charges ADD COLUMN IF NOT EXISTS authorization_completed INTEGER NOT NULL DEFAULT 0");
+
 }
