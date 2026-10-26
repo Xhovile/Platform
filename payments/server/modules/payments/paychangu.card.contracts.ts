@@ -1,3 +1,8 @@
+import type {
+  PayChanguDirectCardInitiation,
+  PayChanguDirectCardVerification,
+} from "./paychangu.card.js";
+
 export type DirectCardStatus =
   | "pending"
   | "requires_action"
@@ -54,6 +59,16 @@ export interface CreatePendingDirectCardChargeInput {
   now: string;
 }
 
+export interface DirectCardInitiationRecord {
+  charge: StoredPayChanguCardCharge;
+  payment: DirectCardPaymentSummary;
+}
+
+export interface DirectCardVerificationRecord {
+  charge: StoredPayChanguCardCharge;
+  payment: DirectCardPaymentSummary;
+}
+
 export type DirectCardChargePatch = Partial<Pick<
   StoredPayChanguCardCharge,
   "status" | "requires3dsAuth" | "threeDsAuthUrl" | "providerOrderReference" |
@@ -72,14 +87,20 @@ export interface DirectCardCheckoutStore {
   getPaymentSummary(reference: string): Promise<DirectCardPaymentSummary | null>;
   getChargeById(chargeId: string): Promise<StoredPayChanguCardCharge | null>;
   getChargeByPaymentReference(reference: string): Promise<StoredPayChanguCardCharge | null>;
-  updateCharge(chargeId: string, patch: DirectCardChargePatch): Promise<StoredPayChanguCardCharge | null>;
-  /** Persist pending/failure verification state without storing PAN or CVV. */
-  recordVerification(charge: StoredPayChanguCardCharge, result: import("./paychangu.card.js").PayChanguDirectCardVerification): Promise<DirectCardPaymentSummary>;
+  /**
+   * Atomically update the charge and payment state after provider initiation.
+   * This must not store the raw provider response or card data.
+   */
+  recordInitiationResult(chargeId: string, result: PayChanguDirectCardInitiation): Promise<DirectCardInitiationRecord>;
+  /**
+   * Atomically persist non-success verification outcomes on both the charge and payment.
+   */
+  recordVerification(chargeId: string, result: PayChanguDirectCardVerification): Promise<DirectCardVerificationRecord>;
   /**
    * Atomically/idempotently mark both the charge and payment paid, then run order,
    * escrow, ticket and seller settlement effects. Repeated calls must never fulfil twice.
    */
-  settleVerifiedCharge(charge: StoredPayChanguCardCharge, result: import("./paychangu.card.js").PayChanguDirectCardVerification): Promise<DirectCardPaymentSummary>;
+  settleVerifiedCharge(chargeId: string, result: PayChanguDirectCardVerification): Promise<DirectCardVerificationRecord>;
 }
 
 export interface DirectCardAuthorizationAdapter {
