@@ -69,14 +69,15 @@ export interface DirectCardCheckoutStore {
    * Reject if the order has acquired a payment reference or changed status meanwhile.
    */
   createPendingCharge(input: CreatePendingDirectCardChargeInput): Promise<StoredPayChanguCardCharge>;
+  getPaymentSummary(reference: string): Promise<DirectCardPaymentSummary | null>;
   getChargeById(chargeId: string): Promise<StoredPayChanguCardCharge | null>;
   getChargeByPaymentReference(reference: string): Promise<StoredPayChanguCardCharge | null>;
   updateCharge(chargeId: string, patch: DirectCardChargePatch): Promise<StoredPayChanguCardCharge | null>;
   /** Persist pending/failure verification state without storing PAN or CVV. */
   recordVerification(charge: StoredPayChanguCardCharge, result: import("./paychangu.card.js").PayChanguDirectCardVerification): Promise<DirectCardPaymentSummary>;
   /**
-   * Atomically/idempotently mark the payment paid and run order, escrow, ticket and
-   * seller settlement effects. Repeated calls must never fulfil twice.
+   * Atomically/idempotently mark both the charge and payment paid, then run order,
+   * escrow, ticket and seller settlement effects. Repeated calls must never fulfil twice.
    */
   settleVerifiedCharge(charge: StoredPayChanguCardCharge, result: import("./paychangu.card.js").PayChanguDirectCardVerification): Promise<DirectCardPaymentSummary>;
 }
