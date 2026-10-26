@@ -127,6 +127,19 @@ Platform/
 
 These areas should be added when working implementations are extracted from products or when a capability has a clear reusable interface.
 
+### Experimental Payments entry point
+
+The feature branch currently prepares a server-only entry point for the PayChangu Direct Card core:
+
+~~~ts
+import {
+  createPayChanguDirectCardService,
+  createPayChanguDirectCardRouter,
+} from "@xhovile/platform/payments/direct-card/server";
+~~~
+
+The consuming application remains responsible for its durable order/payment store, authentication, rate limiting, and a reviewed authorization adapter. The entry point is experimental, not a released standalone Payments product, and not buyer-ready. Do not enable checkout until PayChangu's validation contract is confirmed and PCI DSS compliance plus merchant activation are independently verified.
+
 ## Working principle
 
 **Extract before rewrite.**

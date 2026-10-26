@@ -3,7 +3,10 @@ name: PayChangu Direct Card
 on:
   pull_request:
     paths:
+      - "package.json"
+      - "tsconfig.build.json"
       - "payments/tsconfig.direct-card.json"
+      - "payments/server/modules/payments/direct-card.ts"
       - "payments/server/modules/payments/paychangu.card.ts"
       - "payments/server/modules/payments/paychangu.card.contracts.ts"
       - "payments/server/modules/payments/paychangu.card.schema.ts"
@@ -13,6 +16,7 @@ on:
       - "payments/server/modules/payments/__tests__/*.test.ts"
       - "payments/docs/direct-card-checkout.md"
       - ".github/workflows/paychangu-direct-card.yml"
+      - ".github/workflows/platform-build.yml"
 
 jobs:
   adapter-tests:
@@ -48,6 +52,7 @@ jobs:
             "payments/server/modules/payments/paychangu.card.repository.ts",
             "payments/server/modules/payments/paychangu.card.service.ts",
             "payments/server/modules/payments/paychangu.card.routes.ts",
+            "payments/server/modules/payments/direct-card.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.service.test.ts",

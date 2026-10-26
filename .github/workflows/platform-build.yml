@@ -23,5 +23,8 @@ jobs:
       - name: Build Platform
         run: npm run build
 
+      - name: Verify Direct Card server package export
+        run: npm run test:direct-card-export
+
       - name: Run tests
         run: node --test dist/cache/test/*.test.js dist/rate-limit/test/*.test.js dist/auth/otp/test/*.test.js
