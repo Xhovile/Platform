@@ -15,6 +15,7 @@ export function ensurePayChanguCardChargeSchema(db: PayChanguCardSchemaDatabase)
       currency TEXT NOT NULL CHECK (currency IN ('MWK', 'USD')),
       status TEXT NOT NULL DEFAULT 'pending',
       requires_3ds_auth INTEGER NOT NULL DEFAULT 0,
+      authorization_completed INTEGER NOT NULL DEFAULT 0,
       three_ds_auth_url TEXT,
       result_url TEXT NOT NULL,
       provider_order_reference TEXT,
