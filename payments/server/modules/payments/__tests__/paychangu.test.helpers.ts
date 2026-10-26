@@ -121,7 +121,6 @@ export function hashPayload(rawWebhook: string): string {
 
 export function clearPaymentState(): void {
   const db = getPaymentDb();
-  db.prepare('DELETE FROM paychangu_card_charges').run();
   db.prepare('DELETE FROM payout_events').run();
   db.prepare('DELETE FROM payout_attempts').run();
   db.prepare('DELETE FROM payouts').run();
