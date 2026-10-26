@@ -1,48 +1,59 @@
 import { randomUUID } from "node:crypto";
-import type { PaymentVerificationResult } from "../../../src/modules/payments/types.js";
-import type { StoredPayment } from "./payment.repository.js";
-import { paymentRepository } from "./payment.repository.js";
-import { orderRepository } from "../orders/order.repository.js";
-import { applyVerifiedPayChanguPayment } from "./paychangu.flow.js";
 import {
   createPayChanguDirectCardChargeId,
   initiatePayChanguDirectCardCharge,
   validatePayChanguDirectCardFields,
   verifyPayChanguDirectCardCharge,
   type PayChanguDirectCardConfig,
+  type PayChanguDirectCardVerification,
 } from "./paychangu.card.js";
-import { payChanguCardChargeRepository, type StoredPayChanguCardCharge } from "./paychangu.card.repository.js";
-
-export interface DirectCardDetails {
-  cardNumber: string;
-  expiry: string;
-  cvv: string;
-  cardholderName: string;
-}
+import type {
+  DirectCardAuthorizationAdapter,
+  DirectCardCheckoutStore,
+  DirectCardOrderSnapshot,
+  DirectCardPaymentSummary,
+  StoredPayChanguCardCharge,
+} from "./paychangu.card.contracts.js";
 
 export interface DirectCardCheckoutInput {
   orderId: string;
   buyerId: string;
-  amount: number;
-  currency: "MWK" | "USD";
   email: string;
-  card: DirectCardDetails;
+  card: {
+    cardNumber: string;
+    expiry: string;
+    cvv: string;
+    cardholderName: string;
+  };
 }
 
 export interface DirectCardCheckoutResult {
-  payment: StoredPayment;
+  payment: DirectCardPaymentSummary;
   charge: StoredPayChanguCardCharge;
   requiresAction: boolean;
   checkoutUrl: string | null;
   paymentVerified: boolean;
 }
 
-export interface DirectCardVerificationSummary {
+export interface DirectCardReturnResult {
   charge: StoredPayChanguCardCharge;
-  payment: StoredPayment;
-  verified: boolean;
+  payment: DirectCardPaymentSummary;
   status: "paid" | "pending" | "failed" | "unknown";
+  verified: boolean;
+  redirectUrl: string;
   failureReason?: string;
+}
+
+export interface DirectCardServiceDependencies {
+  store: DirectCardCheckoutStore;
+  /** Must be a reviewed adapter for PayChangu's confirmed validation/authorization API. */
+  authorizationAdapter?: DirectCardAuthorizationAdapter;
+}
+
+export interface DirectCardRuntimeConfig {
+  returnUrl: string;
+  resultUrl: string;
+  providerConfig: PayChanguDirectCardConfig;
 }
 
 function truthyFlag(value: string | undefined): boolean {
@@ -65,35 +76,26 @@ function validateConfiguredHttpsUrl(value: string | undefined, label: string, al
   return url.toString();
 }
 
-export interface DirectCardRuntimeConfig {
-  returnUrl: string;
-  resultUrl: string;
-  providerConfig: PayChanguDirectCardConfig;
-}
-
-function resolveDirectCardVerificationConfig(): PayChanguDirectCardConfig {
-  const secret = process.env.PAYCHANGU_SECRET_KEY?.trim();
-  if (!secret) throw new Error("Cannot verify a stored card charge without PAYCHANGU_SECRET_KEY.");
-  return {
-    paychanguSecretKey: secret,
-    paychanguBaseUrl: process.env.PAYCHANGU_BASE_URL,
-  };
-}
-
-export function assertPayChanguDirectCardCheckoutAvailable(): DirectCardRuntimeConfig {
+/** Guard for creating new charges only; it is not used to reconcile existing charges. */
+export function assertPayChanguDirectCardCheckoutAvailable(
+  authorizationAdapter?: DirectCardAuthorizationAdapter,
+): DirectCardRuntimeConfig {
   if (!truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_ENABLED)) {
     throw new Error("Direct card checkout is disabled.");
   }
   if (!truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_PCI_APPROVED)) {
     throw new Error("Direct card checkout requires confirmed PCI DSS approval and PayChangu account activation.");
   }
-  if (!truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED)) {
-    throw new Error("Direct card checkout is blocked until PayChangu's validate-charge/3-D Secure contract is confirmed and implemented.");
+  if (!truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED) ||
+      !authorizationAdapter ||
+      typeof authorizationAdapter.completeAuthorization !== "function") {
+    throw new Error("Direct card checkout is blocked until PayChangu's validation/authorization contract is confirmed and its adapter is registered.");
   }
 
   const secret = process.env.PAYCHANGU_SECRET_KEY?.trim();
   if (!secret) throw new Error("Direct card checkout is missing its server-side PayChangu secret.");
-  const callbackUrl = validateConfiguredHttpsUrl(
+
+  const returnUrl = validateConfiguredHttpsUrl(
     process.env.PAYCHANGU_DIRECT_CARD_RETURN_URL,
     "PayChangu Direct Card return URL",
     readHosts("PAYCHANGU_DIRECT_CARD_RETURN_HOSTS"),
@@ -103,8 +105,9 @@ export function assertPayChanguDirectCardCheckoutAvailable(): DirectCardRuntimeC
     "PayChangu Direct Card result URL",
     readHosts("PAYCHANGU_DIRECT_CARD_RESULT_HOSTS"),
   );
+
   return {
-    returnUrl: callbackUrl,
+    returnUrl,
     resultUrl,
     providerConfig: {
       enabled: true,
@@ -116,246 +119,282 @@ export function assertPayChanguDirectCardCheckoutAvailable(): DirectCardRuntimeC
   };
 }
 
+function resolveVerificationConfig(): PayChanguDirectCardConfig {
+  const secret = process.env.PAYCHANGU_SECRET_KEY?.trim();
+  if (!secret) throw new Error("Cannot verify a stored card charge without PAYCHANGU_SECRET_KEY.");
+  return {
+    paychanguSecretKey: secret,
+    paychanguBaseUrl: process.env.PAYCHANGU_BASE_URL,
+  };
+}
+
 function createPaymentReference(): string {
   return "PAYCHANGU-CARD-" + randomUUID().replace(/-/g, "");
 }
 
-function normalizeCurrency(value: string): string {
-  return value.trim().toUpperCase();
-}
-
-function toVerification(
-  charge: StoredPayChanguCardCharge,
-  input: { verified: boolean; status: string; amount?: number; currency?: string; failureReason?: string },
-): PaymentVerificationResult {
-  return {
-    verified: input.verified,
-    provider: "paychangu",
-    txRef: charge.paymentReference,
-    reference: charge.paymentReference,
-    orderId: charge.orderId,
-    status: input.status,
-    currency: input.currency,
-    amount: input.amount !== undefined ? { amount: input.amount, currency: input.currency ?? charge.currency } : undefined,
-    failureReason: input.failureReason,
-  };
-}
-
-export async function createDirectCardCheckout(input: DirectCardCheckoutInput): Promise<DirectCardCheckoutResult> {
-  const runtime = assertPayChanguDirectCardCheckoutAvailable();
-  if (!Number.isFinite(input.amount) || input.amount <= 0 || Math.round(input.amount * 100) / 100 !== input.amount) {
-    throw new Error("Invalid server-calculated amount for direct card checkout.");
-  }
-  if (!["MWK", "USD"].includes(input.currency)) throw new Error("Unsupported currency for direct card checkout.");
-  if (!/^\S+@\S+\.\S+$/.test(input.email.trim())) throw new Error("A valid buyer email is required for direct card checkout.");
-  validatePayChanguDirectCardFields(input.card);
-
-  const order = await orderRepository.findByIdAsync(input.orderId);
-  if (!order) throw new Error("Order not found for direct card checkout.");
-  if (order.buyerId !== input.buyerId) throw new Error("Order does not belong to the authenticated buyer.");
-  if (order.status !== "pending_payment") throw new Error("Order is not eligible for a new payment.");
-  if (order.paymentReference) throw new Error("Order already has a payment reference; use the existing checkout.");
-  if (Number(order.total.amount) !== input.amount || normalizeCurrency(order.total.currency) !== input.currency) {
-    throw new Error("Direct card checkout amount or currency does not match the server order.");
-  }
-
-  const now = new Date().toISOString();
-  const chargeId = createPayChanguDirectCardChargeId();
-  const paymentReference = createPaymentReference();
-  const payment: StoredPayment = {
-    id: randomUUID(),
-    orderId: input.orderId,
-    provider: "paychangu",
-    method: "card",
-    status: "pending",
-    amount: { amount: input.amount, currency: input.currency },
-    reference: paymentReference,
-    providerReference: chargeId,
-    checkoutUrl: null,
-    paidAt: null,
-    rawResponse: { paymentFlow: "direct_card" },
-    verified: false,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  await paymentRepository.saveAsync(payment);
-  payChanguCardChargeRepository.create({
-    id: randomUUID(),
-    orderId: input.orderId,
-    buyerId: input.buyerId,
-    paymentReference,
-    chargeId,
-    amount: input.amount,
-    currency: input.currency,
-    status: "pending",
-    requires3dsAuth: false,
-    threeDsAuthUrl: null,
-    resultUrl: runtime.resultUrl,
-    providerOrderReference: null,
-    lastProviderStatus: null,
-    failureReason: null,
-    verifiedAt: null,
-  });
-  orderRepository.update(input.orderId, (current) => ({
-    ...current,
-    paymentReference,
-    updatedAt: new Date().toISOString(),
-  } as any));
-
-  let initiation;
-  try {
-    initiation = await initiatePayChanguDirectCardCharge({
-      amount: input.amount,
-      currency: input.currency,
-      email: input.email.trim(),
-      redirectUrl: runtime.returnUrl,
-      chargeId,
-      cardNumber: input.card.cardNumber,
-      expiry: input.card.expiry,
-      cvv: input.card.cvv,
-      cardholderName: input.card.cardholderName,
-    }, runtime.providerConfig);
-  } catch {
-    payChanguCardChargeRepository.updateByChargeId(chargeId, {
-      status: "unknown",
-      failureReason: "The initiation result could not be confirmed. Verify this charge before retrying.",
-    });
-    throw new Error("Card charge initiation could not be confirmed. Do not retry until the payment status has been checked.");
-  }
-
-  const charge = payChanguCardChargeRepository.updateByChargeId(chargeId, {
-    status: initiation.requires3dsAuth ? "requires_action" : "pending_verification",
-    requires3dsAuth: initiation.requires3dsAuth,
-    threeDsAuthUrl: initiation.threeDsAuthUrl ?? null,
-    providerOrderReference: initiation.providerOrderReference ?? null,
-    failureReason: null,
-  });
-  if (!charge) throw new Error("Failed to update the Direct Card Charge record.");
-
-  const updatedPayment = await paymentRepository.updateByReferenceAsync(paymentReference, (current) => ({
-    ...current,
-    status: initiation.requires3dsAuth ? "requires_action" : "pending",
-    checkoutUrl: initiation.threeDsAuthUrl ?? null,
-    rawResponse: { paymentFlow: "direct_card", requires3dsAuth: initiation.requires3dsAuth },
-    updatedAt: new Date().toISOString(),
-  }));
-
-  if (!updatedPayment) throw new Error("Direct Card Charge payment record was not found after initiation.");
-
-  if (initiation.requires3dsAuth) {
-    return { payment: updatedPayment, charge, requiresAction: true, checkoutUrl: initiation.threeDsAuthUrl ?? null, paymentVerified: false };
-  }
-
-  const verification = await verifyAndSettleDirectCardCharge(chargeId);
-  return {
-    payment: verification.payment,
-    charge: verification.charge,
-    requiresAction: false,
-    checkoutUrl: null,
-    paymentVerified: verification.verified,
-  };
-}
-
-export async function verifyAndSettleDirectCardCharge(chargeId: string): Promise<DirectCardVerificationSummary> {
-  const charge = payChanguCardChargeRepository.findByChargeId(chargeId);
-  if (!charge) throw new Error("Direct Card Charge reference was not found.");
-  const payment = await paymentRepository.findByReferenceAsync(charge.paymentReference);
-  if (!payment) throw new Error("Stored payment for Direct Card Charge was not found.");
-
-  if (charge.status === "paid" && payment.verified && payment.status === "captured") {
-    return { charge, payment, verified: true, status: "paid" };
-  }
-  if (charge.status === "failed" || charge.status === "cancelled" || charge.status === "reversed") {
-    return { charge, payment, verified: false, status: "failed", failureReason: charge.failureReason ?? "The card charge is no longer payable." };
-  }
-
-  let result;
-  try {
-    result = await verifyPayChanguDirectCardCharge({
-      chargeId: charge.chargeId,
-      expectedAmount: charge.amount,
-      expectedCurrency: charge.currency as "MWK" | "USD",
-    }, resolveDirectCardVerificationConfig());
-  } catch {
-    const updatedCharge = payChanguCardChargeRepository.updateByChargeId(chargeId, {
-      status: "unknown",
-      failureReason: "PayChangu verification was unavailable; the payment remains unconfirmed.",
-    }) ?? charge;
-    return { charge: updatedCharge, payment, verified: false, status: "unknown", failureReason: updatedCharge.failureReason ?? undefined };
-  }
-
-  const now = new Date().toISOString();
-  if (result.verified) {
-    const verification = toVerification(charge, {
-      verified: true,
-      status: "captured",
-      amount: result.amount,
-      currency: result.currency,
-    });
-    await applyVerifiedPayChanguPayment({
-      ...verification,
-      verified: true,
-      provider: "paychangu",
-      txRef: charge.paymentReference,
-      reference: charge.paymentReference,
-      status: "captured",
-      amount: { amount: charge.amount, currency: charge.currency },
-      currency: charge.currency,
-      checkoutUrl: null,
-    });
-
-    const paidCharge = payChanguCardChargeRepository.updateByChargeId(chargeId, {
-      status: "paid",
-      lastProviderStatus: result.status,
-      failureReason: null,
-      verifiedAt: now,
-    }) ?? charge;
-    const paidPayment = await paymentRepository.updateByReferenceAsync(charge.paymentReference, (current) => ({
-      ...current,
-      status: "captured",
-      verified: true,
-      verification,
-      paidAt: current.paidAt ?? now,
-      updatedAt: now,
-    }));
-    return { charge: paidCharge, payment: paidPayment ?? payment, verified: true, status: "paid" };
-  }
-
-  const failClosed = result.status === "failed" || result.status === "reversed";
-  const nextStatus = failClosed ? "failed" : result.status === "pending" ? "pending_verification" : "unknown";
-  const reason = result.failureReason ?? "PayChangu has not confirmed a successful card charge.";
-  const failedOrPendingCharge = payChanguCardChargeRepository.updateByChargeId(chargeId, {
-    status: nextStatus,
-    lastProviderStatus: result.status,
-    failureReason: reason,
-  }) ?? charge;
-  const verification = toVerification(charge, {
-    verified: false,
-    status: result.status,
-    amount: result.amount,
-    currency: result.currency,
-    failureReason: reason,
-  });
-  const updatedPayment = await paymentRepository.updateByReferenceAsync(charge.paymentReference, (current) => ({
-    ...current,
-    status: failClosed ? "failed" : current.status,
-    verified: false,
-    verification,
-    updatedAt: now,
-  }));
-  return {
-    charge: failedOrPendingCharge,
-    payment: updatedPayment ?? payment,
-    verified: false,
-    status: failClosed ? "failed" : result.status === "pending" ? "pending" : "unknown",
-    failureReason: reason,
-  };
-}
-
-export function buildDirectCardResultRedirect(charge: StoredPayChanguCardCharge, status: "paid" | "pending" | "failed" | "unknown"): string {
+function buildResultRedirect(charge: StoredPayChanguCardCharge, status: DirectCardReturnResult["status"]): string {
   const target = new URL(charge.resultUrl);
   target.searchParams.set("reference", charge.paymentReference);
   target.searchParams.set("payment_status", status);
   return target.toString();
+}
+
+function statusFromVerification(result: PayChanguDirectCardVerification): DirectCardReturnResult["status"] {
+  if (result.verified && result.status === "paid") return "paid";
+  if (result.status === "failed" || result.status === "reversed") return "failed";
+  if (result.status === "pending") return "pending";
+  return "unknown";
+}
+
+function failedVerification(
+  charge: StoredPayChanguCardCharge,
+  status: PayChanguDirectCardVerification["status"],
+  failureReason: string,
+): PayChanguDirectCardVerification {
+  return {
+    chargeId: charge.chargeId,
+    verified: false,
+    status,
+    failureReason,
+  };
+}
+
+export function createPayChanguDirectCardService(dependencies: DirectCardServiceDependencies) {
+  const { store, authorizationAdapter } = dependencies;
+
+  async function getPayment(charge: StoredPayChanguCardCharge): Promise<DirectCardPaymentSummary> {
+    const payment = await store.getPaymentSummary(charge.paymentReference);
+    if (!payment) throw new Error("Stored payment summary was not found for the Direct Card Charge.");
+    return payment;
+  }
+
+  async function verifyAndSettle(
+    chargeId: string,
+    callbackStatusHint: string | null = null,
+  ): Promise<DirectCardReturnResult> {
+    const normalizedChargeId = chargeId.trim();
+    const charge = await store.getChargeById(normalizedChargeId);
+    if (!charge) throw new Error("Direct Card Charge reference was not found.");
+
+    if (charge.status === "paid") {
+      const payment = await getPayment(charge);
+      return {
+        charge,
+        payment,
+        status: "paid",
+        verified: payment.verified,
+        redirectUrl: buildResultRedirect(charge, "paid"),
+      };
+    }
+
+    if (["failed", "cancelled", "reversed"].includes(charge.status)) {
+      const payment = await getPayment(charge);
+      return {
+        charge,
+        payment,
+        status: "failed",
+        verified: false,
+        redirectUrl: buildResultRedirect(charge, "failed"),
+        failureReason: charge.failureReason ?? undefined,
+      };
+    }
+
+    if (charge.requires3dsAuth) {
+      if (!authorizationAdapter || !truthyFlag(process.env.PAYCHANGU_DIRECT_CARD_VALIDATION_CONFIRMED)) {
+        const reason = "PayChangu's validation/authorization contract is not configured; the card charge remains unconfirmed.";
+        const updated = await store.updateCharge(charge.chargeId, { status: "pending_verification", failureReason: reason }) ?? charge;
+        const payment = await store.recordVerification(updated, failedVerification(updated, "pending", reason));
+        return {
+          charge: updated,
+          payment,
+          status: "pending",
+          verified: false,
+          redirectUrl: buildResultRedirect(updated, "pending"),
+          failureReason: reason,
+        };
+      }
+
+      let authorization: { completed: boolean; failureReason?: string };
+      try {
+        authorization = await authorizationAdapter.completeAuthorization({
+          chargeId: charge.chargeId,
+          providerOrderReference: charge.providerOrderReference,
+          callbackStatusHint: callbackStatusHint?.slice(0, 32) ?? null,
+        });
+      } catch {
+        authorization = {
+          completed: false,
+          failureReason: "PayChangu authorization validation could not be confirmed.",
+        };
+      }
+
+      if (!authorization.completed) {
+        const reason = authorization.failureReason ?? "Cardholder authorization is not yet confirmed.";
+        const updated = await store.updateCharge(charge.chargeId, {
+          status: "pending_verification",
+          failureReason: reason,
+        }) ?? charge;
+        const payment = await store.recordVerification(updated, failedVerification(updated, "pending", reason));
+        return {
+          charge: updated,
+          payment,
+          status: "pending",
+          verified: false,
+          redirectUrl: buildResultRedirect(updated, "pending"),
+          failureReason: reason,
+        };
+      }
+    }
+
+    let result: PayChanguDirectCardVerification;
+    try {
+      result = await verifyPayChanguDirectCardCharge({
+        chargeId: charge.chargeId,
+        expectedAmount: charge.amount,
+        expectedCurrency: charge.currency,
+      }, resolveVerificationConfig());
+    } catch {
+      const reason = "PayChangu verification was unavailable; the charge remains unconfirmed.";
+      const updated = await store.updateCharge(charge.chargeId, { status: "unknown", failureReason: reason }) ?? charge;
+      const payment = await store.recordVerification(updated, failedVerification(updated, "unknown", reason));
+      return {
+        charge: updated,
+        payment,
+        status: "unknown",
+        verified: false,
+        redirectUrl: buildResultRedirect(updated, "unknown"),
+        failureReason: reason,
+      };
+    }
+
+    const status = statusFromVerification(result);
+    if (result.verified && status === "paid") {
+      // The consumer's store must atomically persist payment/charge paid states and settle
+      // order, escrow, tickets and any seller payout; this method must be idempotent.
+      const payment = await store.settleVerifiedCharge(charge, result);
+      const paidCharge = await store.getChargeById(charge.chargeId) ?? {
+        ...charge,
+        status: "paid" as const,
+        failureReason: null,
+        verifiedAt: new Date().toISOString(),
+      };
+      return {
+        charge: paidCharge,
+        payment,
+        status: "paid",
+        verified: true,
+        redirectUrl: buildResultRedirect(paidCharge, "paid"),
+      };
+    }
+
+    const nextStatus = result.status === "failed" || result.status === "reversed"
+      ? "failed"
+      : result.status === "pending"
+        ? "pending_verification"
+        : "unknown";
+    const reason = result.failureReason ?? "PayChangu has not confirmed a successful card charge.";
+    const updated = await store.updateCharge(charge.chargeId, {
+      status: nextStatus,
+      failureReason: reason,
+    }) ?? charge;
+    const payment = await store.recordVerification(updated, result);
+    return {
+      charge: updated,
+      payment,
+      status,
+      verified: false,
+      redirectUrl: buildResultRedirect(updated, status),
+      failureReason: reason,
+    };
+  }
+
+  return {
+    async createCheckout(input: DirectCardCheckoutInput): Promise<DirectCardCheckoutResult> {
+      const runtime = assertPayChanguDirectCardCheckoutAvailable(authorizationAdapter);
+      if (!/^\S+@\S+\.\S+$/.test(input.email.trim())) {
+        throw new Error("A valid buyer email is required for direct card checkout.");
+      }
+      validatePayChanguDirectCardFields(input.card);
+
+      const order: DirectCardOrderSnapshot | null = await store.getOrder(input.orderId, input.buyerId);
+      if (!order) throw new Error("Order not found or not owned by the authenticated buyer.");
+      if (order.status !== "pending_payment") throw new Error("Order is not eligible for a new payment.");
+      if (order.paymentReference) throw new Error("Order already has a payment reference; use the existing checkout.");
+      if (!Number.isFinite(order.amount) || order.amount <= 0 || Math.abs(order.amount * 100 - Math.round(order.amount * 100)) > 1e-7) {
+        throw new Error("The stored order has an invalid payment amount.");
+      }
+      if (order.currency !== "MWK" && order.currency !== "USD") {
+        throw new Error("The stored order has an unsupported payment currency.");
+      }
+
+      const now = new Date().toISOString();
+      const chargeId = createPayChanguDirectCardChargeId();
+      const paymentReference = createPaymentReference();
+      const charge = await store.createPendingCharge({
+        order,
+        id: randomUUID(),
+        chargeId,
+        paymentReference,
+        resultUrl: runtime.resultUrl,
+        now,
+      });
+
+      let initiation;
+      try {
+        initiation = await initiatePayChanguDirectCardCharge({
+          amount: order.amount,
+          currency: order.currency,
+          email: input.email.trim().toLowerCase(),
+          redirectUrl: runtime.returnUrl,
+          chargeId,
+          cardNumber: input.card.cardNumber,
+          expiry: input.card.expiry,
+          cvv: input.card.cvv,
+          cardholderName: input.card.cardholderName,
+        }, runtime.providerConfig);
+      } catch {
+        const reason = "The initiation outcome could not be confirmed. Verify the charge before retrying.";
+        await store.updateCharge(chargeId, { status: "unknown", failureReason: reason });
+        throw new Error("Card charge initiation could not be confirmed. Do not retry until the payment status has been checked. Reference: " + chargeId);
+      }
+
+      const next = await store.updateCharge(chargeId, {
+        status: initiation.requires3dsAuth ? "requires_action" : "pending_verification",
+        requires3dsAuth: initiation.requires3dsAuth,
+        threeDsAuthUrl: initiation.threeDsAuthUrl ?? null,
+        providerOrderReference: initiation.providerOrderReference ?? null,
+        failureReason: null,
+      });
+      if (!next) throw new Error("Failed to persist Direct Card Charge initiation state.");
+
+      const payment = await getPayment(next);
+      if (initiation.requires3dsAuth) {
+        return {
+          payment: { ...payment, status: "requires_action", verified: false },
+          charge: next,
+          requiresAction: true,
+          checkoutUrl: initiation.threeDsAuthUrl ?? null,
+          paymentVerified: false,
+        };
+      }
+
+      const verification = await verifyAndSettle(chargeId);
+      return {
+        payment: verification.payment,
+        charge: verification.charge,
+        requiresAction: false,
+        checkoutUrl: null,
+        paymentVerified: verification.verified,
+      };
+    },
+
+    /** Browser-return status is a hint only; it never proves that the charge was paid. */
+    async handleReturn(input: { chargeId: string; callbackStatusHint?: string | null }): Promise<DirectCardReturnResult> {
+      return verifyAndSettle(input.chargeId, input.callbackStatusHint ?? null);
+    },
+
+    async reconcile(chargeId: string): Promise<DirectCardReturnResult> {
+      return verifyAndSettle(chargeId, null);
+    },
+  };
 }
