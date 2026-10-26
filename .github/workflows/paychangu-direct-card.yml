@@ -9,6 +9,7 @@ on:
       - "payments/server/modules/payments/paychangu.card.schema.ts"
       - "payments/server/modules/payments/paychangu.card.repository.ts"
       - "payments/server/modules/payments/paychangu.card.service.ts"
+      - "payments/server/modules/payments/paychangu.card.routes.ts"
       - "payments/server/modules/payments/__tests__/*.test.ts"
       - "payments/docs/direct-card-checkout.md"
       - ".github/workflows/paychangu-direct-card.yml"
@@ -46,6 +47,7 @@ jobs:
             "payments/server/modules/payments/paychangu.card.schema.ts",
             "payments/server/modules/payments/paychangu.card.repository.ts",
             "payments/server/modules/payments/paychangu.card.service.ts",
+            "payments/server/modules/payments/paychangu.card.routes.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.reconciliation.test.ts",
             "payments/server/modules/payments/__tests__/paychangu.card.service.test.ts",
