@@ -66,7 +66,7 @@ export class PayChanguCardChargeRepository {
 
   create(record: StoredPayChanguCardCharge): StoredPayChanguCardCharge {
     this.db.prepare(
-      "INSERT INTO paychangu_card_charges (id, order_id, buyer_id, payment_reference, charge_id, amount, currency, status, requires_3ds_auth, authorization_completed, three_ds_auth_url, result_url, provider_order_reference, last_provider_status, failure_reason, verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO paychangu_card_charges (id, order_id, buyer_id, payment_reference, charge_id, amount, currency, status, requires_3ds_auth, authorization_completed, three_ds_auth_url, result_url, provider_order_reference, last_provider_status, failure_reason, verified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).run(
       record.id, record.orderId, record.buyerId, record.paymentReference, record.chargeId,
       record.amount, record.currency, record.status, record.requires3dsAuth ? 1 : 0, record.authorizationCompleted ? 1 : 0,
